@@ -260,7 +260,7 @@ ${highlighted
         <p class="what">Wij hosten het. Jij koppelt alleen je assistent.</p>
         <ul>
           <li>Inloggen vanuit je assistent, zonder wachtwoord of sleutel</li>
-          <li>Facturen versturen vanaf een betrouwbaar adres</li>
+          <li>Facturen versturen vanaf een betrouwbaar adres (tijdens de proef alleen naar jezelf)</li>
           <li>Bonnen naar je eigen mailbox, geen opslag bij ons</li>
         </ul>
         ${site.cloud.open ? '<a class="button pay" href="/app">Probeer dertig dagen gratis</a>' : '<span class="button waiting">Opent binnenkort</span>'}
