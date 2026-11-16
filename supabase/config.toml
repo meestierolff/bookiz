@@ -1,0 +1,28 @@
+# Supabase project settings for Bookiz Cloud, pushed with `supabase config push`.
+# Supabase provides the Postgres database, user accounts and the OAuth server
+# that AI assistants sign in through. Bookiz itself runs on Vercel.
+project_id = "essdjjsrlglcglehgdme"
+
+[auth]
+site_url = "https://boekiehouder.nl"
+additional_redirect_urls = ["https://boekiehouder.nl/app"]
+jwt_expiry = 3600
+# Nobody signs up with Supabase directly. Bookiz creates a user itself, and only
+# a one-time code sent to that mailbox turns it into a session. Otherwise anyone
+# with the public key could mint a session for an address they do not own.
+enable_signup = false
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = false
+enable_confirmations = true
+otp_length = 6
+otp_expiry = 900
+
+[auth.oauth_server]
+enabled = true
+authorization_url_path = "/oauth/consent"
+# Assistants such as Claude, ChatGPT and Grok register themselves; that is how
+# MCP sign-in works. The safeguard is the consent page, which names the client
+# and the address the browser returns to before the owner approves.
+allow_dynamic_registration = true

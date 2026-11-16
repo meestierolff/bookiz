@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after } from 'node:test';
@@ -12,8 +12,11 @@ import * as store from '../src/store.ts';
 export type TestCtx = Ctx & { sent: Mail[]; setNow: (iso: string) => void };
 
 const opened: Db[] = [];
+const folders: string[] = [];
 after(async () => {
   await Promise.all(opened.map((db) => db.close().catch(() => undefined)));
+  // Each context gets its own data folder; leave none behind.
+  for (const folder of folders) rmSync(folder, { recursive: true, force: true });
 });
 
 /**
@@ -48,10 +51,15 @@ export async function makeCtx(overrides: Partial<Config> = {}): Promise<TestCtx>
     smtpUrl: undefined,
     mailFrom: undefined,
     receiptArchive: 'folder',
+    linkScope: '',
+    maxReceiptBytes: 10 * 1024 * 1024,
+    fallbackArchiveEmail: undefined,
+    dailyMailLimit: undefined,
     ...overrides,
   };
   const db = await openTestDb();
   opened.push(db);
+  folders.push(config.dataDir);
   return {
     db,
     config,

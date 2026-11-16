@@ -77,6 +77,44 @@ export async function openPostgres(databaseUrl: string): Promise<Db> {
   return db;
 }
 
+/**
+ * One dedicated connection, for a server that handles a single administration
+ * per request. `searchPath` selects that administration's schema for the whole
+ * session, so every query of the engine lands there without knowing about it.
+ */
+export async function openConnection(databaseUrl: string, searchPath?: string): Promise<Db> {
+  const { default: pg } = await import('pg');
+  pg.types.setTypeParser(PG_DATE, keepText);
+  pg.types.setTypeParser(PG_TIMESTAMPTZ, toIso);
+  if (searchPath !== undefined && !/^[a-z_][a-z0-9_]*$/.test(searchPath)) throw new Error('invalid schema name');
+  const client = new pg.Client({
+    connectionString: databaseUrl,
+    ...(searchPath ? { options: `-c search_path=${searchPath}` } : {}),
+  });
+  await client.connect();
+  const queryable: Queryable = {
+    query: async <T>(sql: string, params: unknown[] = []) => (await client.query(sql, params)).rows as T[],
+    exec: async (sql) => {
+      await client.query(sql);
+    },
+  };
+  return {
+    ...queryable,
+    transaction: async (fn) => {
+      await client.query('begin');
+      try {
+        const result = await fn(queryable);
+        await client.query('commit');
+        return result;
+      } catch (error) {
+        await client.query('rollback');
+        throw error;
+      }
+    },
+    close: () => client.end(),
+  };
+}
+
 function isRunning(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -136,7 +174,9 @@ export async function openDb(config: Config): Promise<Db> {
   };
 }
 
-async function migrate(db: Db): Promise<void> {
+export const SCHEMA_VERSION = MIGRATIONS.length;
+
+export async function migrate(db: Db): Promise<void> {
   await db.exec(
     'create table if not exists schema_migrations (version integer primary key, applied_at timestamptz not null default now())',
   );

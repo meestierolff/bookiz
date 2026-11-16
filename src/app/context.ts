@@ -9,6 +9,8 @@ export type Ctx = {
   config: Config;
   mail: Mailer;
   now: () => Date;
+  /** Set when changes are not allowed (an ended subscription); reading and exporting still work. */
+  locked?: string | undefined;
 };
 
 export function todayOf(ctx: Ctx): IsoDate {
