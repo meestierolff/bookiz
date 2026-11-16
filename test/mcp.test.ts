@@ -34,7 +34,7 @@ test('an agent can run the books through MCP tools alone', async () => {
   const { client, call } = await connect(ctx);
 
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 21);
+  assert.equal(tools.length, 24);
   assert.ok(tools.every((tool) => (tool.description ?? '').length > 40), 'every tool explains itself');
   const attach = tools.find((tool) => tool.name === 'attach_receipt');
   assert.deepEqual(attach?._meta?.['openai/fileParams'], ['file']);

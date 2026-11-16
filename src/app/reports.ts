@@ -11,6 +11,7 @@ import type { Queryable } from '../db.ts';
 import * as store from '../store.ts';
 import { type Ctx, inEuros, nextPeriod, todayOf, vatDeadline } from './context.ts';
 import { needsReceipt, present } from './expenses.ts';
+import { draftDueRecurring } from './recurring.ts';
 import { summarize } from './invoices.ts';
 
 async function loadBooks(q: Queryable) {
@@ -149,10 +150,14 @@ export async function overview(ctx: Ctx) {
       ],
     };
   }
-  const books = await loadBooks(ctx.db);
-  const { invoices, expenses } = books;
   const year = yearOf(todayDate);
   const actions: string[] = [];
+  const due = ctx.locked || !availableYears().includes(year) ? [] : await draftDueRecurring(ctx);
+  for (const draft of due) {
+    actions.push(`Periodieke factuur voor ${draft.customer} (periode vanaf ${draft.for_date}) staat klaar als concept ${draft.draft_id}: laat controleren en maak definitief.`);
+  }
+  const books = await loadBooks(ctx.db);
+  const { invoices, expenses } = books;
   // Without rules for the running year the past can still be shown and filed.
   const rules = availableYears().includes(year) ? rulesFor(year) : null;
   if (!rules) {

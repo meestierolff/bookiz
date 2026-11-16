@@ -53,7 +53,7 @@ export function computeYear(input: {
   const r = rules.rules;
   const notes: string[] = [];
 
-  const invoices = input.invoices.filter((i) => i.status === 'final' && yearOf(i.issue_date) === year);
+  const invoices = input.invoices.filter((i) => i.status === 'final' && !i.imported && yearOf(i.issue_date) === year);
   const omzet = sum(invoices.map((i) => i.net_cents));
 
   const live = input.expenses.filter((e) => !e.voided_at);
@@ -61,7 +61,7 @@ export function computeYear(input: {
   let privatePaid = 0;
   for (const expense of live) {
     if (yearOf(expense.date) !== year) continue;
-    if (expense.paid_from === 'private' && expense.kind !== 'mileage') privatePaid += expense.total_cents;
+    if (expense.paid_from === 'private' && expense.kind !== 'mileage' && !expense.imported) privatePaid += expense.total_cents;
     if (expense.kind === 'investment') continue;
     const cost = businessCost(expense, business, rules);
     const key = expense.kind === 'mileage' ? 'kilometers' : expense.category;
@@ -84,7 +84,8 @@ export function computeYear(input: {
     .filter((d) => d.this_year_cents !== 0 || d.book_value_end_cents !== 0);
   const afschrijving = sum(afschrijvingen.map((d) => d.this_year_cents));
   const investeringen = sum(
-    assets.filter((a) => yearOf(a.date) === year).map((a) => businessCost(a, business, rules)),
+    // An imported asset was an investment in the year it was bought, in the previous package.
+    assets.filter((a) => yearOf(a.date) === year && !a.imported).map((a) => businessCost(a, business, rules)),
   );
 
   const aftrekbaar = sum(kosten.map((k) => k.deductible_cents));

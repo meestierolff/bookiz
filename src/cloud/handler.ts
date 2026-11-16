@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { isIP } from 'node:net';
 import { createClient } from '@supabase/supabase-js';
 import { needsReceipt } from '../app/expenses.ts';
 import * as reports from '../app/reports.ts';
@@ -15,6 +16,8 @@ import {
   bearerToken,
   createLoginCode,
   currentSession,
+  readCookies,
+  revokeSession,
   type Session,
   sessionCookies,
   verifyAccessToken,
@@ -62,28 +65,55 @@ async function form(req: IncomingMessage): Promise<URLSearchParams> {
   return new URLSearchParams((await readBody(req, 64 * 1024)).toString('utf8'));
 }
 
+/**
+ * The caller's address as the platform saw it. Vercel sets these headers itself
+ * and discards what a client sends; anything that is not an IP address is ignored.
+ */
 function clientIp(req: IncomingMessage): string {
-  return String(req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '').split(',')[0]!.trim();
+  for (const header of ['x-vercel-forwarded-for', 'x-real-ip']) {
+    const value = String(req.headers[header] ?? '').split(',')[0]!.trim();
+    if (isIP(value)) return value;
+  }
+  return req.socket.remoteAddress ?? 'unknown';
 }
 
-/** Sign-in mails go to any address someone types, so cap them per address and per caller. */
-async function allowLogin(cloud: Cloud, email: string, ip: string): Promise<boolean> {
+type AttemptKind = 'code_sent' | 'code_wrong';
+
+/**
+ * Sign-in is the one thing open to anyone, so it is rationed: codes mailed per
+ * address, per caller and in total, and wrong codes per address and per caller.
+ * A six-digit code that may be guessed five times is as strong as it needs to be.
+ */
+async function allowAttempt(cloud: Cloud, kind: AttemptKind, email: string, ip: string, record: boolean): Promise<boolean> {
+  const limits = kind === 'code_sent' ? { email: 3, ip: 10, total: 300 } : { email: 5, ip: 20, total: 2000 };
   const db = await cloud.connect();
   try {
     return await db.transaction(async (tx) => {
       await tx.query("select pg_advisory_xact_lock(hashtext('bookiz-login'))");
       await tx.query("delete from bookiz_cloud.login_attempt where at < now() - interval '1 day'");
-      const rows = await tx.query<{ by_email: number; by_ip: number }>(
-        `select count(*) filter (where email = $1)::int as by_email, count(*) filter (where ip = $2)::int as by_ip
-         from bookiz_cloud.login_attempt where at > now() - interval '15 minutes'`,
-        [email, ip],
+      const rows = await tx.query<{ by_email: number; by_ip: number; total: number }>(
+        `select count(*) filter (where email = $1)::int as by_email, count(*) filter (where ip = $2)::int as by_ip, count(*)::int as total
+         from bookiz_cloud.login_attempt where kind = $3 and at > now() - interval '15 minutes'`,
+        [email, ip, kind],
       );
-      if ((rows[0]?.by_email ?? 0) >= 3 || (rows[0]?.by_ip ?? 0) >= 10) return false;
-      await tx.query('insert into bookiz_cloud.login_attempt (email, ip) values ($1, $2)', [email, ip]);
+      const used = rows[0] ?? { by_email: 0, by_ip: 0, total: 0 };
+      if (used.by_email >= limits.email || used.by_ip >= limits.ip || used.total >= limits.total) return false;
+      if (record) await tx.query('insert into bookiz_cloud.login_attempt (email, ip, kind) values ($1, $2, $3)', [email, ip, kind]);
       return true;
     });
   } finally {
     await db.close();
+  }
+}
+
+/** Follow a redirect that Supabase hands back only if it is a real link, never script or data. */
+function safeExternal(target: unknown): string | null {
+  if (typeof target !== 'string') return null;
+  try {
+    const protocol = new URL(target).protocol;
+    return ['javascript:', 'data:', 'vbscript:', 'file:', 'blob:'].includes(protocol) ? null : target;
+  } catch {
+    return null;
   }
 }
 
@@ -121,7 +151,7 @@ async function supabaseFor(cloud: Cloud, session: Session) {
 
 async function mcp(cloud: Cloud, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const token = bearerToken(req);
-  const user = token ? await verifyAccessToken(cloud.env, token) : null;
+  const user = token ? await verifyAccessToken(cloud.env, token, 'assistant') : null;
   if (!user || !user.email) {
     // This challenge is how an assistant discovers where to sign in.
     const metadata = `${cloud.env.publicUrl}/.well-known/oauth-protected-resource/mcp`;
@@ -184,7 +214,8 @@ async function consent(cloud: Cloud, req: IncomingMessage, res: ServerResponse, 
     }
     // Supabase answers with a redirect when this client was approved before.
     const details = data as unknown as Record<string, any>;
-    if (!details.authorization_id && typeof details.redirect_url === 'string') return redirect(res, details.redirect_url);
+    const already = !details.authorization_id ? safeExternal(details.redirect_url) : null;
+    if (already) return redirect(res, already);
     let host = 'onbekend adres';
     try {
       host = new URL(String(details.redirect_uri ?? details.redirect_url ?? '')).host;
@@ -207,8 +238,9 @@ async function consent(cloud: Cloud, req: IncomingMessage, res: ServerResponse, 
   const id = fields.get('authorization_id') ?? '';
   const oauth = (await supabaseFor(cloud, session)).auth.oauth;
   const { data, error } = fields.get('decision') === 'approve' ? await oauth.approveAuthorization(id) : await oauth.denyAuthorization(id);
-  const target = (data as unknown as Record<string, any> | null)?.redirect_url ?? (data as unknown as Record<string, any> | null)?.redirect_to;
-  if (error || typeof target !== 'string') {
+  const answer = data as unknown as Record<string, any> | null;
+  const target = safeExternal(answer?.redirect_url ?? answer?.redirect_to);
+  if (error || !target) {
     return sendHtml(res, 400, (n) => messagePage(n, 'Dat lukte niet', 'De koppeling kon niet worden afgerond. Start het koppelen opnieuw vanuit je assistent.'));
   }
   return redirect(res, target);
@@ -228,7 +260,7 @@ async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url:
     if (!/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(email)) {
       return sendHtml(res, 400, (nonce) => loginPage(nonce, { next, error: 'Dat is geen geldig e-mailadres.' }));
     }
-    if (!(await allowLogin(cloud, email, clientIp(req)))) {
+    if (!(await allowAttempt(cloud, 'code_sent', email, clientIp(req), true))) {
       return sendHtml(res, 429, (nonce) => loginPage(nonce, { next, error: 'Te veel pogingen. Probeer het over een kwartier opnieuw.' }));
     }
     const code = await createLoginCode(cloud.env, email);
@@ -240,16 +272,25 @@ async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url:
     const fields = await form(req);
     const email = (fields.get('email') ?? '').trim().toLowerCase();
     const next = safeNext(fields.get('next'));
+    const ip = clientIp(req);
+    if (!(await allowAttempt(cloud, 'code_wrong', email, ip, false))) {
+      return sendHtml(res, 429, (nonce) => loginPage(nonce, { next, error: 'Te veel onjuiste codes. Vraag over een kwartier een nieuwe code aan.' }));
+    }
     try {
       const session = await verifyLoginCode(cloud.env, email, (fields.get('code') ?? '').replace(/\s/g, ''));
       return redirect(res, next, sessionCookies(session));
     } catch (error) {
       if (!(error instanceof BookizError)) throw error;
+      await allowAttempt(cloud, 'code_wrong', email, ip, true);
       return sendHtml(res, 400, (nonce) => codePage(nonce, { email, next, error: error.message }));
     }
   }
 
-  if (page === 'logout' && req.method === 'POST') return redirect(res, '/', sessionCookies(null));
+  if (page === 'logout' && req.method === 'POST') {
+    const access = readCookies(req)['__Host-bz_at'];
+    if (access) await revokeSession(cloud.env, access);
+    return redirect(res, '/', sessionCookies(null));
+  }
 
   const session = await currentSession(cloud.env, req, res);
   if (!session) return redirect(res, '/app/login');

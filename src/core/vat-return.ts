@@ -77,7 +77,7 @@ export function computeVatReturn(input: {
   };
 
   for (const invoice of input.invoices) {
-    if (invoice.status !== 'final' || !inRange(invoice.issue_date, from, to)) continue;
+    if (invoice.status !== 'final' || invoice.imported || !inRange(invoice.issue_date, from, to)) continue;
     const number = invoice.number as string;
     // The btw owed is what the invoices charged, cent for cent, not a recalculation of the period total.
     for (const group of invoiceTotals(invoice.lines, rules).groups) {
@@ -112,7 +112,7 @@ export function computeVatReturn(input: {
   let voorbelasting = 0;
   const voorbelastingDocuments = new Set<string>();
   for (const expense of input.expenses) {
-    if (expense.voided_at || expense.vat_period !== period) continue;
+    if (expense.voided_at || expense.imported || expense.vat_period !== period) continue;
     const owed = reverseChargeVat(expense, rules);
     if (owed !== 0) {
       const rubriek = expense.vat_treatment === 'eu_reverse_charge' ? '4b' : '4a';

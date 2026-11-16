@@ -44,6 +44,7 @@ export const CONTROL_SCHEMA = `
     at timestamptz not null default now()
   );
   create index if not exists login_attempt_at on bookiz_cloud.login_attempt (at);
+  alter table bookiz_cloud.login_attempt add column if not exists kind text not null default 'code_sent';
   create table if not exists bookiz_cloud.stripe_event (
     id text primary key,
     type text not null,
