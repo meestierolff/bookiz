@@ -1,0 +1,15 @@
+# Self-hosted Bookiz over HTTP. Put a reverse proxy with TLS in front of it.
+# The embedded database lives in the volume; set DATABASE_URL in .env to use
+# your own Postgres instead.
+services:
+  bookiz:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - '127.0.0.1:8787:8787'
+    volumes:
+      - bookiz-data:/data
+
+volumes:
+  bookiz-data:

@@ -1,0 +1,183 @@
+{
+  "year": 2026,
+  "status": "definitief",
+  "checked_on": "2026-11-16",
+  "rules": {
+    "btw_tarief_hoog": {
+      "title": "Algemeen btw-tarief",
+      "value": 21,
+      "unit": "%",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/tarieven_en_vrijstellingen/",
+      "quote": "Het algemene btw-tarief is 21%. Voor sommige goederen en diensten geldt het lage tarief van 9%, het 0%-tarief of een vrijstelling."
+    },
+    "btw_tarief_laag": {
+      "title": "Laag btw-tarief",
+      "value": 9,
+      "unit": "%",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/tarieven_en_vrijstellingen/",
+      "quote": "Het algemene btw-tarief is 21%. Voor sommige goederen en diensten geldt het lage tarief van 9%, het 0%-tarief of een vrijstelling."
+    },
+    "btw_horeca_niet_aftrekbaar": {
+      "title": "Btw op eten en drinken in de horeca is niet aftrekbaar",
+      "value": true,
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/btw_aftrekken/welke_btw_is_aftrekbaar/bijzondere_situaties/uitgaven_in_de_horeca",
+      "quote": "In de volgende situaties kunt u de btw hierover niet aftrekken: Het eten en drinken wordt genuttigd in een horecagelegenheid. Een cateraar verzorgt het eten en drinken in een ruimte die speciaal daarvoor is ingericht.",
+      "note": "Bookiz past dit toe op de categorie eten_drinken_horeca. De uitzondering voor doorberekende kosten en de grens van € 227 per persoon voor relatiegeschenken zijn niet ingebouwd."
+    },
+    "btw_correctiegrens": {
+      "title": "Correctie in de eerstvolgende aangifte tot dit bedrag; daarboven suppletie",
+      "value": 1000,
+      "unit": "EUR",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/btw_aangifte_doen_en_betalen/aangifte_corrigeren/aangifte_corrigeren",
+      "quote": "Hebt u bij uw btw-aangifte een bedrag van maximaal €1000 te veel of te weinig ingevuld? Dan geeft u dat bedrag op in uw eerstvolgende btw-aangifte."
+    },
+    "kor_omzetgrens": {
+      "title": "Omzetgrens kleineondernemersregeling (KOR) per kalenderjaar",
+      "value": 20000,
+      "unit": "EUR",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/nl/btw/content/kor-voorwaarden",
+      "quote": "Per kalenderjaar hebt u een omzet van maximaal € 20.000. De maximale omzet van € 20.000 geldt voor het kalenderjaar waarin u zich aanmeldt, én voor het kalenderjaar daarvóór.",
+      "note": "Bij overschrijding moet je je direct afmelden en is de overschrijdende levering of dienst volledig belast (belastingdienst.nl, afmelden-kor)."
+    },
+    "urencriterium": {
+      "title": "Urencriterium",
+      "value": 1225,
+      "unit": "uur",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/inkomstenbelasting/inkomstenbelasting_voor_ondernemers/voorwaarden_urencriterium",
+      "quote": "U besteedt in het kalenderjaar minimaal 1.225 uren aan uw onderneming(en).",
+      "note": "Wie geen starter is moet ook meer tijd aan de onderneming besteden dan aan ander werk. Bookiz toetst dit niet; de ondernemer geeft zelf op of het criterium is gehaald."
+    },
+    "zelfstandigenaftrek": {
+      "title": "Zelfstandigenaftrek",
+      "value": 1200,
+      "unit": "EUR",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/inkomstenbelasting/veranderingen-inkomstenbelasting-2026/ondernemersaftrek-2026/zelfstandigenaftrek-2026",
+      "quote": "Dan is de zelfstandigenaftrek in 2026 een bedrag van € 1.200.",
+      "note": "Niet hoger dan de winst vóór ondernemersaftrek, behalve bij startersaftrek. Voor wie de AOW-leeftijd heeft bereikt geldt 50%; dat is niet ingebouwd."
+    },
+    "startersaftrek": {
+      "title": "Startersaftrek",
+      "value": 2123,
+      "unit": "EUR",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/inkomstenbelasting/veranderingen-inkomstenbelasting-2026/ondernemersaftrek-2026/zelfstandigenaftrek-2026",
+      "quote": "De zelfstandigenaftrek wordt verhoogd met een startersaftrek van € 2.123 in de volgende situatie: U was in 1 of meer van de 5 voorafgaande kalenderjaren geen ondernemer. U paste in die periode niet meer dan 2 keer zelfstandigenaftrek toe."
+    },
+    "mkb_winstvrijstelling": {
+      "title": "MKB-winstvrijstelling",
+      "value": 12.7,
+      "unit": "%",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/inkomstenbelasting/veranderingen-inkomstenbelasting-2026/mkb-winstvrijstelling-2026",
+      "quote": "In 2026 is de mkb-winstvrijstelling 12,7% van de winst, nadat u deze hebt verminderd met de ondernemersaftrek.",
+      "note": "Bij verlies verkleint de vrijstelling het fiscale verlies."
+    },
+    "kia": {
+      "title": "Kleinschaligheidsinvesteringsaftrek (KIA)",
+      "value": [
+        { "to": 2900, "kind": "none" },
+        { "to": 71683, "kind": "percent", "percent": 28 },
+        { "to": 132746, "kind": "fixed", "amount": 20072 },
+        { "to": 398236, "kind": "taper", "amount": 20072, "percent": 7.56, "over": 132746 },
+        { "to": null, "kind": "none" }
+      ],
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/inkomstenbelasting/veranderingen-inkomstenbelasting-2026/investeringsaftrek-2026/kleinschaligheidsinvesteringsaftrek-2026",
+      "quote": "niet meer dan € 2.900 | 0% / € 2.901 t/m € 71.683 | 28% van het investeringsbedrag / € 71.684 t/m € 132.746 | € 20.072 / € 132.747 t/m € 398.236 | € 20.072 verminderd met 7,56% van het deel van het investeringsbedrag boven de € 132.746 / meer dan € 398.236 | 0%",
+      "note": "Alleen bedrijfsmiddelen van € 450 of meer tellen mee. Uitgesloten bedrijfsmiddelen, zoals een personenauto die niet voor beroepsvervoer is bestemd, herkent Bookiz niet: boek die niet als investering."
+    },
+    "investering_drempel": {
+      "title": "Grens tussen kosten en investering per bedrijfsmiddel",
+      "value": 450,
+      "unit": "EUR",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/inkomstenbelasting/inkomstenbelasting_voor_ondernemers/afschrijving/wat_is_afschrijven",
+      "quote": "Koopt u een bedrijfsmiddel voor minder dan € 450? Dan trekt u het bedrag wel in 1 keer af als kosten.",
+      "note": "Exclusief btw als je de btw kunt terugkrijgen, anders inclusief btw."
+    },
+    "afschrijving_max_pct": {
+      "title": "Maximale afschrijving per jaar",
+      "value": 20,
+      "unit": "% van de aanschafkosten",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/inkomstenbelasting/inkomstenbelasting_voor_ondernemers/afschrijving/hoe_berekent_u_het_bedrag_van_de_afschrijving",
+      "quote": "De afschrijving is per jaar maximaal 20% van de aanschafkosten van het bedrijfsmiddel. Voor goodwill geldt een percentage van maximaal 10%.",
+      "note": "Formule: (aanschafkosten - restwaarde) : vermoedelijke gebruiksduur, naar rato van het deel van het jaar dat het bedrijfsmiddel is gebruikt. Goodwill ondersteunt Bookiz niet."
+    },
+    "kilometervergoeding": {
+      "title": "Aftrek per zakelijke kilometer met een privévervoermiddel",
+      "value": 0.25,
+      "unit": "EUR per km",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/inkomstenbelasting/veranderingen-inkomstenbelasting-2026/zakelijk-gebruik-privevervoermiddel-2026",
+      "quote": "Dan mag u in 2026 voor de zakelijke ritten € 0,25 per kilometer van uw winst aftrekken. In 2025 was dit € 0,23.",
+      "note": "Let op: de wettekst op wetten.overheid.nl noemde op 16 november 2026 nog € 0,23; de verhoging staat in het Belastingplan 2027 met terugwerkende kracht tot 1 januari 2026, dat de Eerste Kamer toen nog niet had aangenomen. Bookiz volgt de Belastingdienst."
+    },
+    "beperkt_aftrekbaar_pct": {
+      "title": "Aftrekbaar deel van voedsel, drank, genotmiddelen, representatie, congressen, seminars en studiereizen",
+      "value": 80,
+      "unit": "%",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/inkomstenbelasting/veranderingen-inkomstenbelasting-2026/drempel-beperkt-aftrekbare-kosten-2026",
+      "quote": "Er geldt in 2026 een drempel van € 5.700. In 2025 was de drempel ook € 5.700. In plaats van deze drempel mogen ondernemers voor de inkomstenbelasting 80% van deze kosten aftrekken in hun aangifte.",
+      "note": "Bookiz rekent altijd met 80%. De drempel van € 5.700 is alleen voordeliger boven € 28.500 aan zulke kosten per jaar."
+    },
+    "bewaarplicht_jaren": {
+      "title": "Bewaartermijn van de administratie",
+      "value": 7,
+      "unit": "jaar",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/administratie_bijhouden/facturen_maken/uw_facturen_bewaren",
+      "quote": "U mag facturen en bonnetjes ook scannen en digitaal bewaren. Er moet dan wel sprake zijn van een juiste en volledige weergave van het origineel. Belangrijk hierbij is dat de echtheidskenmerken ook worden opgeslagen.",
+      "note": "Een foto of scan mag het papieren origineel vervangen als die volledig en leesbaar is en de hele termijn beschikbaar blijft. Voor onroerende zaken geldt tien jaar."
+    },
+    "ib_box1": {
+      "title": "Tarieven box 1, jonger dan de AOW-leeftijd",
+      "value": [
+        { "to": 38883, "rate": 35.75 },
+        { "to": 78426, "rate": 37.56 },
+        { "to": null, "rate": 49.5 }
+      ],
+      "unit": "%",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/prive/inkomstenbelasting/heffingskortingen_boxen_tarieven/boxen_en_tarieven/box_1/box_1",
+      "quote": "1 | t/m € 38.883 | 35,75% / 2 | Meer dan € 38.883 t/m € 78.426 | 37,56% / 3 | Meer dan € 78.426 | 49,50%"
+    },
+    "ib_tariefsaanpassing": {
+      "title": "Tariefsaanpassing aftrekposten in de hoogste schijf",
+      "value": 11.94,
+      "unit": "%",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/nl/aftrek-en-kortingen/content/afbouw-tarief-aftrekposten-bij-hoog-inkomen",
+      "quote": "Het percentage van de tariefsaanpassing is in 2026 11,94% (2025: 12,02%). Door de aanpassing krijgt u in 2026 over al uw aftrekposten in de hoogste belastingschijf maximaal 37,56% (2025: 37,48%) belasting terug.",
+      "note": "Geldt onder meer voor de zelfstandigenaftrek en de mkb-winstvrijstelling."
+    },
+    "algemene_heffingskorting": {
+      "title": "Algemene heffingskorting, jonger dan de AOW-leeftijd",
+      "value": [
+        { "from": 0, "to": 29736, "base": 3115, "rate": 0 },
+        { "from": 29736, "to": 78426, "base": 3115, "rate": -6.398 },
+        { "from": 78426, "to": null, "base": 0, "rate": 0 }
+      ],
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/prive/inkomstenbelasting/heffingskortingen_boxen_tarieven/heffingskortingen/algemene_heffingskorting/tabel-algemene-heffingskorting-2026",
+      "quote": "tot en met € 29.736 | € 3.115 / vanaf € 29.737 tot en met € 78.426 | € 3.115 - 6,398% x (verzamelinkomen - € 29.736) / vanaf € 78.427 | € 0"
+    },
+    "arbeidskorting": {
+      "title": "Arbeidskorting, jonger dan de AOW-leeftijd",
+      "value": [
+        { "from": 0, "to": 11965, "base": 0, "rate": 8.324 },
+        { "from": 11965, "to": 25845, "base": 996, "rate": 31.009 },
+        { "from": 25845, "to": 45592, "base": 5300, "rate": 1.95 },
+        { "from": 45592, "to": 132920, "base": 5685, "rate": -6.51 },
+        { "from": 132920, "to": null, "base": 0, "rate": 0 }
+      ],
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/prive/inkomstenbelasting/heffingskortingen_boxen_tarieven/heffingskortingen/arbeidskorting/tabel-arbeidskorting-2026",
+      "quote": "tot en met € 11.965 | 8,324% x arbeidsinkomen / vanaf € 11.966 tot en met € 25.845 | € 996 + 31,009% x (arbeidsinkomen - € 11.965) / vanaf € 25.846 tot en met € 45.592 | € 5.300+ 1.950% x (arbeidsinkomen - € 25.845) / vanaf € 45.593 tot en met € 132.920 | € 5.685 - 6,510% x (arbeidsinkomen - € 45.592) / vanaf € 132.921 | € 0",
+      "note": "De pagina schrijft '1.950%' met een punt; gelezen als 1,950%, want € 5.300 + 1,95% x € 19.747 sluit aan op € 5.685 in de volgende regel."
+    },
+    "zvw_pct": {
+      "title": "Inkomensafhankelijke bijdrage Zvw voor ondernemers",
+      "value": 4.85,
+      "unit": "%",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/prive/werk_en_inkomen/zorgverzekeringswet/veranderingen-bijdrage-zvw/percentages-zvw",
+      "quote": "bijdrage Zvw die u betaalt met een aanslag Zvw: 4,85% (was 5,26% in 2025)"
+    },
+    "zvw_max_inkomen": {
+      "title": "Maximumbijdrage-inkomen Zvw",
+      "value": 79409,
+      "unit": "EUR",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/prive/werk_en_inkomen/zorgverzekeringswet/veranderingen-bijdrage-zvw/percentages-zvw",
+      "quote": "Het maximumbijdrage-inkomen in 2026 is € 79.409 (was € 75.864 in 2025)."
+    }
+  }
+}

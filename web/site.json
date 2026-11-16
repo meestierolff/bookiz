@@ -1,0 +1,15 @@
+{
+  "site_url": "https://boekiehouder.nl",
+  "repo_url": "https://github.com/meestierolff/bookiz",
+  "contact_email": "",
+  "cloud": {
+    "price_year_excl": 99,
+    "stripe_link": ""
+  },
+  "dfy": {
+    "price_year_excl": 499,
+    "founding_price_year_excl": 399,
+    "founding_seats": 50,
+    "stripe_link": ""
+  }
+}
