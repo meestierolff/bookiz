@@ -416,7 +416,23 @@ export async function handle(cloud: Cloud, req: IncomingMessage, res: ServerResp
     const parts = url.pathname.split('/').filter(Boolean);
 
     if (url.pathname === '/api/health') {
-      return send(res, 200, JSON.stringify({ ok: true, version: VERSION, rules: availableYears() }), 'application/json');
+      // Mail is loaded on demand, so prove here that it can be: otherwise the first sign-in would be the test.
+      const mailLibrary = await import('nodemailer').then(
+        (module) => typeof module.createTransport === 'function',
+        () => false,
+      );
+      return send(
+        res,
+        200,
+        JSON.stringify({
+          ok: true,
+          version: VERSION,
+          rules: availableYears(),
+          mail: { library: mailLibrary, configured: Boolean(cloud.env.smtpUrl && cloud.env.mailFrom) },
+          payments: { configured: Boolean(cloud.env.stripeWebhookSecret && cloud.env.stripePaymentLinkId && cloud.env.stripePaymentLink) },
+        }),
+        'application/json',
+      );
     }
     if (parts[0] === '.well-known' && parts[1] === 'oauth-protected-resource') {
       return send(

@@ -200,10 +200,12 @@ An MCP tool receives text, not files, and assistants differ in what they pass on
 The last row always works. The ChatGPT route is built from OpenAI's
 documentation and has not been tested against ChatGPT itself.
 
-With `RECEIPT_ARCHIVE=email` the original is mailed to the address you set as
-`archive_email` (or your business `email`), with a fixed subject:
-`[Bookiz bon] K2026-001 · date · vendor · amount`. You must keep receipts for
-seven years, so that mailbox is now part of your administration.
+With `RECEIPT_ARCHIVE=email` the original is mailed with a fixed subject:
+`[Bookiz bon] K2026-001 · date · vendor · amount`. Self-hosted, it goes to the
+address you set as `archive_email` (or your business `email`). In Cloud it
+always goes to the address you sign in with, the only one Bookiz has proof is
+yours. You must keep receipts for seven years, so that mailbox is now part of
+your administration.
 
 ## Hosting
 
