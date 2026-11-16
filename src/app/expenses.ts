@@ -110,7 +110,11 @@ export async function recordExpense(ctx: Ctx, input: ExpenseInput) {
   };
 
   if (kind === 'investment') {
-    const cost = businessCost({ ...draft, id: 0, ref: '', receipt: null, voided_at: null, void_reason: null }, business, rules);
+    const cost = businessCost(
+      { ...draft, id: 0, ref: '', receipt: null, voided_at: null, void_reason: null, imported: false, original_cost_cents: null },
+      business,
+      rules,
+    );
     const threshold = toCents(rules.rules.investering_drempel.value);
     if (cost < threshold) {
       kind = 'cost';

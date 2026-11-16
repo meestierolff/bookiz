@@ -234,7 +234,9 @@ export async function invoicePdf(ctx: Ctx, invoice: Invoice): Promise<Buffer> {
   const business = invoice.business_snapshot ?? (await store.requireBusiness(ctx.db));
   const contact = invoice.contact_snapshot ?? (await store.getContact(ctx.db, invoice.contact_id));
   // A credit invoice repeats the tariffs of the invoice it reverses.
-  const priced = invoice.credit_of ? await store.getInvoice(ctx.db, invoice.credit_of) : invoice;
+  const original = invoice.credit_of ? await store.getInvoice(ctx.db, invoice.credit_of) : null;
+  // An imported original may date from a year Bookiz has no rules for; then today's tariffs label the lines.
+  const priced = original && !original.imported ? original : invoice;
   return renderInvoicePdf(invoice, business, contact, rulesFor(yearOf(priced.issue_date)));
 }
 
@@ -257,6 +259,12 @@ async function requireFinal(ctx: Ctx, number: string): Promise<Invoice> {
 
 export async function sendInvoice(ctx: Ctx, input: { number: string; to?: string | undefined; message?: string | undefined }) {
   const invoice = await requireFinal(ctx, input.number);
+  if (invoice.imported) {
+    throw new BookizError(
+      `Factuur ${invoice.number} is overgenomen uit je vorige pakket; Bookiz heeft het origineel niet.`,
+      'Stuur de factuur uit je oude pakket opnieuw, of maak hier een herinnering in je eigen woorden.',
+    );
+  }
   const business = await store.requireBusiness(ctx.db);
   const to = input.to ?? invoice.contact_snapshot?.email;
   if (!to) {

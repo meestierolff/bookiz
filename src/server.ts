@@ -5,7 +5,9 @@ import { inEuros, todayOf } from './app/context.ts';
 import { setupBusiness } from './app/business.ts';
 import * as expenses from './app/expenses.ts';
 import * as invoices from './app/invoices.ts';
+import * as recurring from './app/recurring.ts';
 import * as reports from './app/reports.ts';
+import { importOpeningState } from './app/switch.ts';
 import { CATEGORIES } from './core/categories.ts';
 import { toCents } from './core/money.ts';
 import { EXPENSE_VAT_TREATMENTS, SALE_VAT_CODES } from './core/types.ts';
@@ -269,6 +271,91 @@ export function createServer(ctx: Ctx): McpServer {
       readOnly: true,
     },
     (args) => invoices.listInvoices(ctx, args),
+  );
+
+  tool(
+    'save_recurring_invoice',
+    {
+      title: 'Periodieke factuur',
+      description:
+        'Create (omit id), change or stop (active: false) an invoice that repeats every 1, 3 or 12 months, for example a monthly retainer. On each date Bookiz prepares a draft, never a final invoice; get_overview reports the draft and the owner approves it as usual.',
+      input: {
+        id: z.number().int().optional(),
+        contact_id: z.number().int().optional(),
+        lines: z
+          .array(
+            z.object({
+              description: z.string().trim().min(1).max(500),
+              quantity: z.number(),
+              unit_price: euros,
+              vat_code: z.enum(SALE_VAT_CODES).optional(),
+            }),
+          )
+          .min(1)
+          .max(50)
+          .optional(),
+        every_months: z.union([z.literal(1), z.literal(3), z.literal(12)]).optional(),
+        next_date: date.optional().describe('The first date a draft should be prepared'),
+        note: z.string().max(1000).nullable().optional(),
+        active: z.boolean().optional(),
+      },
+    },
+    (args) => recurring.saveRecurringInvoice(ctx, args),
+  );
+
+  tool(
+    'list_recurring_invoices',
+    {
+      title: 'Periodieke facturen',
+      description: 'The invoices that repeat, with their interval and next date.',
+      input: {},
+      readOnly: true,
+    },
+    () => recurring.listRecurring(ctx),
+  );
+
+  tool(
+    'import_opening_state',
+    {
+      title: 'Overstappen',
+      description: `Take over what is still alive when the owner switches from another bookkeeping package (Moneybird, e-Boekhouden, Jortt, a spreadsheet). Use it once, after setup_business and after creating the customers with save_contact. It does NOT copy the old administration: the owner keeps an export of the old package for seven years.
+last_invoice_number: the year and the highest sequence number already used there, so numbering continues without a gap or duplicate (not needed when switching on 1 January).
+open_invoices: invoices sent from the old package that are not paid yet, with their original number and amounts. They appear as outstanding and can be paid or credited here, but do not count again for turnover or btw.
+assets: equipment still being depreciated, at its book value on the switch date, with the original purchase price and the remaining years.
+If the owner uses another package with an MCP server or export, read the figures from there; never estimate them.`,
+      input: {
+        last_invoice_number: z.object({ year: z.number().int().min(2020).max(2100), last_used: z.number().int().min(0).max(99999) }).optional(),
+        open_invoices: z
+          .array(
+            z.object({
+              number: z.string().trim().min(1).max(40),
+              contact_id: z.number().int(),
+              issue_date: date,
+              due_date: date,
+              net: euros.describe('Amount excluding btw'),
+              vat: euros.describe('The btw amount on the invoice'),
+              vat_code: z.enum(SALE_VAT_CODES).optional(),
+              description: optionalText,
+            }),
+          )
+          .max(100)
+          .optional(),
+        assets: z
+          .array(
+            z.object({
+              description: z.string().trim().min(2).max(200),
+              original_cost: euros.positive().describe('Purchase price excluding reclaimable btw'),
+              book_value: euros.positive().describe('Value still on the books on the switch date'),
+              remaining_years: z.number().int().min(1).max(50),
+              residual_value: euros.nonnegative().optional(),
+              opening_date: date.describe('The switch date, e.g. 2027-01-01'),
+            }),
+          )
+          .max(50)
+          .optional(),
+      },
+    },
+    (args) => importOpeningState(ctx, args),
   );
 
   tool(

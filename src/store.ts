@@ -1,7 +1,7 @@
 import type { Queryable } from './db.ts';
 import { BookizError } from './errors.ts';
 import type { IsoDate } from './core/dates.ts';
-import type { Business, Contact, Expense, Invoice, Receipt, TaxYear, VatFiling } from './core/types.ts';
+import type { Business, Contact, Expense, Invoice, Receipt, RecurringInvoice, TaxYear, VatFiling } from './core/types.ts';
 
 const BUSINESS_FIELDS = [
   'name',
@@ -32,10 +32,10 @@ const CONTACT_FIELDS = [
 ] as const satisfies readonly (keyof Contact)[];
 
 const INVOICE_COLUMNS =
-  'id, status, number, contact_id, contact_snapshot, business_snapshot, issue_date, supply_date, due_date, lines, net_cents, vat_cents, total_cents, credit_of, note, paid_on, sent_at';
+  'id, status, number, contact_id, contact_snapshot, business_snapshot, issue_date, supply_date, due_date, lines, net_cents, vat_cents, total_cents, credit_of, note, paid_on, sent_at, imported';
 
 const EXPENSE_COLUMNS =
-  'id, ref, date, vat_period, vendor, description, kind, category, total_cents, vat_cents, vat_treatment, paid_from, km, useful_life_years, residual_cents, receipt, voided_at, void_reason';
+  'id, ref, date, vat_period, vendor, description, kind, category, total_cents, vat_cents, vat_treatment, paid_from, km, useful_life_years, residual_cents, receipt, voided_at, void_reason, imported, original_cost_cents';
 
 export async function getBusiness(q: Queryable): Promise<Business | null> {
   const rows = await q.query<Business>(`select ${BUSINESS_FIELDS.join(', ')} from business where id = 1`);
@@ -189,12 +189,48 @@ export async function deleteDraftInvoice(q: Queryable, id: number): Promise<void
   await q.query(`delete from invoice where id = $1 and status = 'draft'`, [id]);
 }
 
+/** Continues after the highest number used here or, after a switch, in the previous package. */
 export async function nextInvoiceSeq(tx: Queryable, year: number): Promise<number> {
   const rows = await tx.query<{ next: number }>(
-    'select coalesce(max(seq), 0) + 1 as next from invoice where year = $1',
+    `select greatest(
+       coalesce((select max(seq) from invoice where year = $1), 0),
+       coalesce((select last_used from invoice_counter where year = $1), 0)
+     ) + 1 as next`,
     [year],
   );
   return (rows[0] as { next: number }).next;
+}
+
+export async function setInvoiceCounter(tx: Queryable, year: number, lastUsed: number): Promise<void> {
+  await tx.query(
+    'insert into invoice_counter (year, last_used) values ($1, $2) on conflict (year) do update set last_used = excluded.last_used',
+    [year, lastUsed],
+  );
+}
+
+export async function insertImportedInvoice(
+  tx: Queryable,
+  invoice: InvoiceDraft & { number: string; contact_snapshot: Contact; business_snapshot: Business },
+): Promise<void> {
+  await tx.query(
+    `insert into invoice (status, number, contact_id, contact_snapshot, business_snapshot, issue_date, supply_date, due_date,
+       lines, net_cents, vat_cents, total_cents, note, imported)
+     values ('final', $1, $2, $3::jsonb, $4::jsonb, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, true)`,
+    [
+      invoice.number,
+      invoice.contact_id,
+      JSON.stringify(invoice.contact_snapshot),
+      JSON.stringify(invoice.business_snapshot),
+      invoice.issue_date,
+      invoice.supply_date,
+      invoice.due_date,
+      JSON.stringify(invoice.lines),
+      invoice.net_cents,
+      invoice.vat_cents,
+      invoice.total_cents,
+      invoice.note,
+    ],
+  );
 }
 
 export async function markInvoiceFinal(
@@ -218,7 +254,10 @@ export async function setInvoiceSent(q: Queryable, id: number): Promise<void> {
   await q.query('update invoice set sent_at = now() where id = $1', [id]);
 }
 
-export type NewExpense = Omit<Expense, 'id' | 'ref' | 'receipt' | 'voided_at' | 'void_reason'>;
+export type NewExpense = Omit<Expense, 'id' | 'ref' | 'receipt' | 'voided_at' | 'void_reason' | 'imported' | 'original_cost_cents'> & {
+  imported?: boolean;
+  original_cost_cents?: number | null;
+};
 
 export async function insertExpense(tx: Queryable, expense: NewExpense, year: number): Promise<Expense> {
   const rows = await tx.query<{ next: number }>(
@@ -229,8 +268,8 @@ export async function insertExpense(tx: Queryable, expense: NewExpense, year: nu
   const ref = `K${year}-${String(seq).padStart(3, '0')}`;
   await tx.query(
     `insert into expense (ref, year, seq, date, vat_period, vendor, description, kind, category, total_cents,
-       vat_cents, vat_treatment, paid_from, km, useful_life_years, residual_cents)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+       vat_cents, vat_treatment, paid_from, km, useful_life_years, residual_cents, imported, original_cost_cents)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
     [
       ref,
       year,
@@ -248,6 +287,8 @@ export async function insertExpense(tx: Queryable, expense: NewExpense, year: nu
       expense.km,
       expense.useful_life_years,
       expense.residual_cents,
+      expense.imported ?? false,
+      expense.original_cost_cents ?? null,
     ],
   );
   return getExpense(tx, ref);
@@ -270,6 +311,31 @@ export async function voidExpense(q: Queryable, ref: string, reason: string): Pr
 
 export async function setReceipt(q: Queryable, ref: string, receipt: Receipt): Promise<void> {
   await q.query('update expense set receipt = $2::jsonb where ref = $1', [ref, JSON.stringify(receipt)]);
+}
+
+const RECURRING_COLUMNS = 'id, contact_id, lines, note, every_months, next_date, active';
+
+export async function listRecurring(q: Queryable): Promise<RecurringInvoice[]> {
+  return q.query<RecurringInvoice>(`select ${RECURRING_COLUMNS} from recurring_invoice order by id`);
+}
+
+export async function saveRecurring(q: Queryable, id: number | undefined, value: Omit<RecurringInvoice, 'id'>): Promise<number> {
+  const params = [value.contact_id, JSON.stringify(value.lines), value.note, value.every_months, value.next_date, value.active];
+  if (id === undefined) {
+    const rows = await q.query<{ id: number }>(
+      `insert into recurring_invoice (contact_id, lines, note, every_months, next_date, active)
+       values ($1, $2::jsonb, $3, $4, $5, $6) returning id`,
+      params,
+    );
+    return (rows[0] as { id: number }).id;
+  }
+  const rows = await q.query<{ id: number }>(
+    `update recurring_invoice set contact_id = $1, lines = $2::jsonb, note = $3, every_months = $4, next_date = $5, active = $6
+     where id = $7 returning id`,
+    [...params, id],
+  );
+  if (!rows[0]) throw new BookizError(`Periodieke factuur ${id} bestaat niet.`);
+  return id;
 }
 
 export async function listFilings(q: Queryable): Promise<VatFiling[]> {

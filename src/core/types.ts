@@ -69,6 +69,8 @@ export type Invoice = {
   note: string | null;
   paid_on: IsoDate | null;
   sent_at: string | null;
+  /** Brought over from another package: already counted there for turnover and btw. */
+  imported: boolean;
 };
 
 export const EXPENSE_VAT_TREATMENTS = ['nl', 'eu_reverse_charge', 'non_eu_reverse_charge', 'none'] as const;
@@ -106,6 +108,20 @@ export type Expense = {
   receipt: Receipt | null;
   voided_at: string | null;
   void_reason: string | null;
+  /** An asset brought over at its book value; its purchase counted in the old package. */
+  imported: boolean;
+  /** Purchase price of an imported asset, the base for the yearly depreciation maximum. */
+  original_cost_cents: Cents | null;
+};
+
+export type RecurringInvoice = {
+  id: number;
+  contact_id: number;
+  lines: InvoiceLine[];
+  note: string | null;
+  every_months: 1 | 3 | 12;
+  next_date: IsoDate;
+  active: boolean;
 };
 
 export type VatFiling = {

@@ -123,4 +123,29 @@ export const MIGRATIONS: string[] = [
   alter table audit_log enable row level security;
   alter table schema_migrations enable row level security;
   `,
+  // Switching from another package: documents that already counted there, a
+  // starting point for invoice numbers, and invoices that repeat.
+  `
+  alter table invoice add column imported boolean not null default false;
+  alter table expense add column imported boolean not null default false;
+  alter table expense add column original_cost_cents integer check (original_cost_cents > 0);
+
+  create table invoice_counter (
+    year integer primary key,
+    last_used integer not null check (last_used >= 0)
+  );
+  alter table invoice_counter enable row level security;
+
+  create table recurring_invoice (
+    id integer generated always as identity primary key,
+    contact_id integer not null references contact (id),
+    lines jsonb not null,
+    note text,
+    every_months integer not null check (every_months in (1, 3, 12)),
+    next_date date not null,
+    active boolean not null default true,
+    created_at timestamptz not null default now()
+  );
+  alter table recurring_invoice enable row level security;
+  `,
 ];

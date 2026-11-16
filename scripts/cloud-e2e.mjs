@@ -64,7 +64,7 @@ try {
   ok('dashboard opens for a signed-in owner', dash.status === 200 && dashHtml.includes('Mijn Bookiz') && dashHtml.includes(SITE + '/mcp'), `status ${dash.status} ${dash.status !== 200 ? dashHtml.slice(0, 200) : ''}`);
   const tokenA = await oauthToken(a);
   const A = await mcpClient(tokenA);
-  ok('assistant sees the tools', (await A.client.listTools()).tools.length === 21);
+  ok('assistant sees the tools', (await A.client.listTools()).tools.length === 24);
   ok('new administration is empty', (await A.call('get_overview')).setup === 'nog niet ingericht');
   await A.call('setup_business', { name: 'Zelftest BV', address_line: 'Teststraat 1', postal_code: '1234 AB', city: 'Utrecht', kvk_number: '12345678', vat_id: 'NL123456789B01', iban: 'NL00BANK0123456789' });
   const c = await A.call('save_contact', { name: 'Klant A', address_line: 'Kade 5', city: 'Rotterdam' });

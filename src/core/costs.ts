@@ -53,7 +53,8 @@ export type Depreciation = {
 export function depreciate(asset: Expense, cost: Cents, year: number, rules: RuleSet): Depreciation {
   const life = asset.useful_life_years ?? 5;
   const depreciable = Math.max(0, cost - asset.residual_cents);
-  const yearly = Math.min(depreciable / life, (cost * rules.rules.afschrijving_max_pct.value) / 100);
+  // The yearly maximum is a share of the purchase price, also for an asset brought over at book value.
+  const yearly = Math.min(depreciable / life, ((asset.original_cost_cents ?? cost) * rules.rules.afschrijving_max_pct.value) / 100);
   let written = 0;
   let thisYear = 0;
   for (let y = yearOf(asset.date); y <= year; y++) {
