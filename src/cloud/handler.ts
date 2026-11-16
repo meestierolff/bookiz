@@ -6,7 +6,7 @@ import { needsReceipt } from '../app/expenses.ts';
 import * as reports from '../app/reports.ts';
 import { yearOf } from '../core/dates.ts';
 import { BookizError } from '../errors.ts';
-import { fail, handleDocumentLink, handleMcp, readBody, send, sendHtml } from '../http.ts';
+import { fail, handleDocumentLink, handleMcp, readBody, secretMatches, send, sendHtml } from '../http.ts';
 import { createMailer, type Mailer } from '../mail.ts';
 import { uploadLink, verifyLink } from '../receipts.ts';
 import { availableYears } from '../rules.ts';
@@ -416,6 +416,10 @@ export async function handle(cloud: Cloud, req: IncomingMessage, res: ServerResp
     const parts = url.pathname.split('/').filter(Boolean);
 
     if (url.pathname === '/api/health') {
+      // The public answer says only that the server is up. How it is configured is the operator's business.
+      if (!secretMatches(cloud.env.operatorToken, bearerToken(req))) {
+        return send(res, 200, JSON.stringify({ ok: true, version: VERSION }), 'application/json');
+      }
       // Mail is loaded on demand, so prove here that it can be: otherwise the first sign-in would be the test.
       const mailLibrary = await import('nodemailer').then(
         (module) => typeof module.createTransport === 'function',
