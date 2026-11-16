@@ -16,7 +16,8 @@ const HELP = `bookiz ${VERSION}: bookkeeping for Dutch sole proprietors, driven 
 Environment:
   BOOKIZ_DATA_DIR   where the embedded database, receipts and PDFs live (default ~/.bookiz)
   DATABASE_URL      use this Postgres instead of the embedded one (Neon, Supabase, Docker)
-  BOOKIZ_TOKEN      required with --http: the secret agents must present (at least 24 characters)
+  BOOKIZ_TOKEN      required with --http: the secret agents send as a Bearer header (at least 24 characters)
+  BOOKIZ_URL_TOKEN  optional second secret that enables /mcp/<secret> for assistants that only accept a URL
   PUBLIC_URL        public https address of this server, enables receipt-upload and invoice links
   SMTP_URL          smtp://user:pass@host:587, for sending invoices and archiving receipts by e-mail
   MAIL_FROM         sender address, e.g. "Jouw Bedrijf <facturen@jouwdomein.nl>"

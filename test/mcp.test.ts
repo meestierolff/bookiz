@@ -12,6 +12,7 @@ import { createServer } from '../src/server.ts';
 import { makeCtx, PNG, seed } from './helpers.ts';
 
 const TOKEN = 'test-token-with-at-least-24-characters';
+const URL_TOKEN = 'separate-url-secret-of-24-chars-or-more';
 
 type ToolResult = { isError?: boolean; content: { type: string; text: string }[] };
 
@@ -86,7 +87,7 @@ test('an agent can run the books through MCP tools alone', async () => {
 });
 
 test('over HTTP: token required, receipt upload page and invoice PDF behind signed links', async () => {
-  const ctx = await makeCtx({ mode: 'http', token: TOKEN });
+  const ctx = await makeCtx({ mode: 'http', token: TOKEN, urlToken: URL_TOKEN });
   const server = createHttp(ctx).listen(0);
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   ctx.config.publicUrl = base;
@@ -94,10 +95,16 @@ test('over HTTP: token required, receipt upload page and invoice PDF behind sign
     assert.equal((await fetch(`${base}/health`)).status, 200);
     assert.equal((await fetch(`${base}/mcp`, { method: 'POST', body: '{}' })).status, 401);
     assert.equal((await fetch(`${base}/mcp/wrong-token`, { method: 'POST', body: '{}' })).status, 401);
+    // The server token is never accepted in a URL, and the URL secret never as a header.
+    assert.equal((await fetch(`${base}/mcp/${TOKEN}`, { method: 'POST', body: '{}' })).status, 401);
+    assert.equal(
+      (await fetch(`${base}/mcp`, { method: 'POST', body: '{}', headers: { authorization: `Bearer ${URL_TOKEN}` } })).status,
+      401,
+    );
 
     for (const transport of [
       new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { authorization: `Bearer ${TOKEN}` } } }),
-      new StreamableHTTPClientTransport(new URL(`${base}/mcp/${TOKEN}`)),
+      new StreamableHTTPClientTransport(new URL(`${base}/mcp/${URL_TOKEN}`)),
     ]) {
       const client = new Client({ name: 'test', version: '0' });
       await client.connect(transport);
@@ -110,7 +117,8 @@ test('over HTTP: token required, receipt upload page and invoice PDF behind sign
     const expense = await expenses.recordExpense(ctx, { date: '2026-11-10', vendor: 'Bakker', amount: 8.72, vat_amount: 0.72 });
     const link = uploadLink(ctx.config, expense.ref) as string;
     assert.ok(expense.receipt_help.includes(link));
-    assert.equal((await fetch(link.replace(/.$/, '0'))).status, 404, 'a wrong signature finds nothing');
+    const forged = link.replace(/.$/, (last) => (last === '0' ? '1' : '0'));
+    assert.equal((await fetch(forged)).status, 404, 'a wrong signature finds nothing');
     assert.match(await (await fetch(link)).text(), /Kies een foto of pdf van de bon/);
     assert.equal((await fetch(link, { method: 'PUT', body: 'geen foto' })).status, 400);
     const uploaded = await fetch(link, { method: 'PUT', body: PNG });
@@ -128,4 +136,20 @@ test('over HTTP: token required, receipt upload page and invoice PDF behind sign
     server.close();
     server.closeAllConnections();
   }
+});
+
+test('the URL door stays shut unless a separate secret is configured', async () => {
+  const ctx = await makeCtx({ mode: 'http', token: TOKEN });
+  const server = createHttp(ctx).listen(0);
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    assert.equal((await fetch(`${base}/mcp/${TOKEN}`, { method: 'POST', body: '{}' })).status, 401);
+    assert.equal((await fetch(`${base}/mcp/`, { method: 'POST', body: '{}' })).status, 401);
+  } finally {
+    server.close();
+    server.closeAllConnections();
+  }
+  const { loadConfig } = await import('../src/config.ts');
+  assert.throws(() => loadConfig('http', { BOOKIZ_TOKEN: TOKEN, BOOKIZ_URL_TOKEN: TOKEN }), /niet gelijk zijn aan BOOKIZ_TOKEN/);
+  assert.throws(() => loadConfig('http', { BOOKIZ_TOKEN: TOKEN, BOOKIZ_URL_TOKEN: 'kort' }), /minstens 24 tekens/);
 });

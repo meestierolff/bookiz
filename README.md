@@ -225,16 +225,21 @@ Codex) use `https://bookiz.example.com/mcp` with `Authorization: Bearer <token>`
 
 claude.ai, ChatGPT and Grok only accept OAuth or an unauthenticated URL for
 user-added servers. Until Bookiz has OAuth they can connect to
-`https://bookiz.example.com/mcp/<token>`. **That URL is a password**: it can end
-up in logs and history, which is why the MCP specification advises against it.
-Use it only for your own server, rotate the token if it leaks, and prefer the
-header where you can.
+`https://bookiz.example.com/mcp/<url-secret>`, but only if you switch that on by
+setting a second secret, `BOOKIZ_URL_TOKEN`. It is off by default.
+
+**That URL is a password.** It can end up in logs and browser history, which is
+why the MCP specification advises against secrets in URLs. So it is a separate
+secret from `BOOKIZ_TOKEN`: you can rotate it without touching your other
+clients, and it cannot be used to forge receipt or invoice links. If you use
+it, turn off or redact access logging for `/mcp/*` on your reverse proxy.
 
 | Variable | Purpose |
 | --- | --- |
 | `BOOKIZ_DATA_DIR` | Embedded database, receipts, PDFs. Default `~/.bookiz` |
 | `DATABASE_URL` | Use this Postgres instead (Supabase, Neon, your own) |
-| `BOOKIZ_TOKEN` | Required with `--http`, at least 24 characters |
+| `BOOKIZ_TOKEN` | Required with `--http`, at least 24 characters. Sent as a Bearer header |
+| `BOOKIZ_URL_TOKEN` | Optional second secret that enables `/mcp/<secret>` for URL-only assistants |
 | `PUBLIC_URL` | Enables receipt-upload links and invoice PDF links |
 | `SMTP_URL`, `MAIL_FROM` | Send invoices and archive receipts by e-mail (Brevo or any SMTP) |
 | `RECEIPT_ARCHIVE` | `email` or `folder`. Default: `email` when SMTP is set |

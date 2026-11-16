@@ -10,8 +10,8 @@ import { MAX_RECEIPT_BYTES, verifySignature } from './receipts.ts';
 import { createServer, VERSION } from './server.ts';
 import * as store from './store.ts';
 
-function tokenMatches(ctx: Ctx, given: string | undefined): boolean {
-  const expected = Buffer.from(ctx.config.token ?? '');
+function secretMatches(secret: string | undefined, given: string | undefined): boolean {
+  const expected = Buffer.from(secret ?? '');
   const candidate = Buffer.from(given ?? '');
   return expected.length > 0 && expected.length === candidate.length && timingSafeEqual(expected, candidate);
 }
@@ -126,9 +126,12 @@ export function createHttp(ctx: Ctx): Server {
 
       if (parts[0] === 'mcp') {
         const bearer = /^Bearer (.+)$/.exec(req.headers.authorization ?? '')?.[1];
-        // Header for clients that can send one; the path form exists because
-        // claude.ai and ChatGPT accept only OAuth or a bare URL.
-        if (!tokenMatches(ctx, bearer) && !tokenMatches(ctx, parts[1])) return send(res, 401, 'Unauthorized');
+        // The server token only ever travels in a header. Clients that accept
+        // nothing but a URL (claude.ai, ChatGPT, Grok) get their own secret,
+        // which is off unless configured and can be rotated on its own.
+        const viaHeader = secretMatches(ctx.config.token, bearer);
+        const viaUrl = secretMatches(ctx.config.urlToken, parts[1]);
+        if (!viaHeader && !viaUrl) return send(res, 401, 'Unauthorized');
         return await handleMcp(ctx, req, res);
       }
 
