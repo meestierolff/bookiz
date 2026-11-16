@@ -265,16 +265,23 @@ export async function sendInvoice(ctx: Ctx, input: { number: string; to?: string
       'Geef "to" mee of sla het adres op met save_contact.',
     );
   }
-  if (ctx.config.dailyMailLimit !== undefined) {
-    const sent = await ctx.db.query<{ n: number }>(
-      "select count(*)::int as n from audit_log where tool = 'send_invoice' and outcome = 'ok' and at > now() - interval '1 day'",
-    );
-    if ((sent[0]?.n ?? 0) >= ctx.config.dailyMailLimit) {
-      throw new BookizError(
-        `Je hebt vandaag al ${ctx.config.dailyMailLimit} facturen verstuurd; meer kan pas morgen.`,
-        'De pdf kun je altijd zelf downloaden en versturen.',
+  const limit = ctx.config.dailyMailLimit;
+  if (limit !== undefined) {
+    // Claim a slot before sending, behind the business lock: two parallel calls
+    // cannot both take the last one, and a failed send still counts.
+    await ctx.db.transaction(async (tx) => {
+      await store.lockBusiness(tx);
+      const used = await tx.query<{ n: number }>(
+        "select count(*)::int as n from audit_log where tool = 'mail_quota' and at > now() - interval '1 day'",
       );
-    }
+      if ((used[0]?.n ?? 0) >= limit) {
+        throw new BookizError(
+          `Je hebt in de afgelopen 24 uur al ${limit} facturen verstuurd; meer kan pas later.`,
+          'De pdf kun je altijd zelf downloaden en versturen.',
+        );
+      }
+      await store.logAudit(tx, 'mail_quota', { number: invoice.number, to }, 'reserved');
+    });
   }
   const isCredit = invoice.total_cents < 0;
   const text =

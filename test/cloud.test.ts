@@ -1,0 +1,212 @@
+import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { test } from 'node:test';
+import * as expenses from '../src/app/expenses.ts';
+import * as invoices from '../src/app/invoices.ts';
+import * as reports from '../src/app/reports.ts';
+import type { CloudEnv } from '../src/cloud/env.ts';
+import { type Cloud, handle, verifyStripeSignature } from '../src/cloud/handler.ts';
+import { accessOf, type Connector, ensureAccount, findAccount, tenantSchema, withTenant } from '../src/cloud/tenants.ts';
+import { type Db, openEmbedded, SCHEMA_VERSION } from '../src/db.ts';
+import { invoiceLink, verifyLink } from '../src/receipts.ts';
+import * as store from '../src/store.ts';
+
+const env: CloudEnv = {
+  publicUrl: 'https://bookiz.test',
+  supabaseUrl: 'https://project.supabase.test',
+  supabasePublishableKey: 'pk',
+  supabaseSecretKey: 'sk',
+  databaseUrl: '',
+  linkSecret: 'link-secret-for-tests-0123456789abcdef',
+  smtpUrl: undefined,
+  mailFrom: undefined,
+  stripeWebhookSecret: 'whsec_test_secret',
+  stripePaymentLink: 'https://buy.stripe.test/abc',
+  cronSecret: undefined,
+  trialDays: 30,
+};
+
+/** One embedded database standing in for the server: "connecting" just selects the schema. */
+async function embeddedCloud(): Promise<{ cloud: Cloud; raw: Db; setNow: (iso: string) => void }> {
+  const raw = await openEmbedded();
+  let now = new Date('2026-11-16T10:00:00Z');
+  const connect: Connector = async (searchPath) => {
+    await raw.exec(`set search_path to ${searchPath ?? 'public'}`);
+    return { ...raw, close: async () => undefined };
+  };
+  const cloud: Cloud = { env, connect, mail: async () => ({ messageId: '<test>' }), now: () => now };
+  return { cloud, raw, setNow: (iso) => (now = new Date(iso)) };
+}
+
+const alice = { id: '11111111-1111-4111-8111-111111111111', email: 'alice@example.test' };
+const bob = { id: '22222222-2222-4222-8222-222222222222', email: 'bob@example.test' };
+
+async function invoiceFor(cloud: Cloud, account: Awaited<ReturnType<typeof ensureAccount>>, name: string) {
+  return withTenant(
+    cloud.connect,
+    cloud.env,
+    account,
+    cloud.mail,
+    async (ctx) => {
+      await store.saveBusiness(ctx.db, { name, address_line: 'Straat 1', postal_code: '1234 AB', city: 'Utrecht', kvk_number: '12345678', vat_id: 'NL123456789B01', iban: 'NL00BANK0123456789' });
+      const contact = await store.saveContact(ctx.db, undefined, { name: `Klant van ${name}`, address_line: 'Kade 1', city: 'Zwolle' });
+      const draft = await invoices.createInvoice(ctx, { contact_id: contact.id, lines: [{ description: 'Werk', quantity: 1, unit_price: 100 }] });
+      return invoices.finalizeInvoice(ctx, draft.draft_id);
+    },
+    cloud.now,
+  );
+}
+
+test('every customer has an administration of their own', async () => {
+  const { cloud, raw } = await embeddedCloud();
+  await raw.exec((await import('../src/cloud/tenants.ts')).CONTROL_SCHEMA);
+  const a = await ensureAccount(cloud.connect, env, alice);
+  const b = await ensureAccount(cloud.connect, env, bob);
+  assert.notEqual(a.tenant, b.tenant);
+  assert.match(tenantSchema(a.tenant), /^t_[0-9a-f]{20}$/);
+  assert.equal(a.schema_version, SCHEMA_VERSION);
+  assert.equal((await ensureAccount(cloud.connect, env, alice)).tenant, a.tenant, 'signing in again reuses the administration');
+
+  const first = await invoiceFor(cloud, a, 'Alice');
+  const second = await invoiceFor(cloud, b, 'Bob');
+  // Both are the first invoice of their own books: same number, different administrations.
+  assert.equal(first.number, '2026-001');
+  assert.equal(second.number, '2026-001');
+  assert.notEqual(first.pdf, second.pdf);
+  assert.ok(String(first.pdf).startsWith(`https://bookiz.test/k/${a.tenant}/factuur/2026-001/`));
+
+  const seen = await withTenant(cloud.connect, env, b, cloud.mail, async (ctx) => (await store.requireBusiness(ctx.db)).name, cloud.now);
+  assert.equal(seen, 'Bob');
+
+  // A link signed for Alice does not verify inside Bob's administration, though the invoice number matches.
+  const signature = /\/([0-9a-f]+)\.pdf$/.exec(String(first.pdf))?.[1] as string;
+  await withTenant(cloud.connect, env, a, cloud.mail, async (ctx) => assert.equal(verifyLink(ctx.config, 'factuur', '2026-001', signature), true), cloud.now);
+  await withTenant(
+    cloud.connect,
+    env,
+    b,
+    cloud.mail,
+    async (ctx) => {
+      assert.equal(verifyLink(ctx.config, 'factuur', '2026-001', signature), false);
+      assert.notEqual(invoiceLink(ctx.config, '2026-001'), first.pdf);
+    },
+    cloud.now,
+  );
+  assert.throws(() => tenantSchema('public; drop schema bookiz_cloud'), /invalid tenant/);
+});
+
+test('after the trial the books can be read and exported, not changed', async () => {
+  const { cloud, raw, setNow } = await embeddedCloud();
+  await raw.exec((await import('../src/cloud/tenants.ts')).CONTROL_SCHEMA);
+  const account = await ensureAccount(cloud.connect, env, alice);
+  await invoiceFor(cloud, account, 'Alice');
+  assert.equal(accessOf(account, env, cloud.now()).allowed, true);
+
+  setNow('2027-01-20T10:00:00Z');
+  assert.equal(accessOf(account, env, cloud.now()).allowed, false);
+  await withTenant(
+    cloud.connect,
+    env,
+    account,
+    cloud.mail,
+    async (ctx) => {
+      assert.match(ctx.locked ?? '', /proefperiode of abonnement/);
+      const exported = (await reports.exportBooks(ctx, { year: 2026 })) as Record<string, any>;
+      assert.equal(exported.invoices.length, 1, 'your data is never held hostage');
+    },
+    cloud.now,
+  );
+
+  const paid = { ...account, status: 'active' as const, paid_until: '2028-01-01T00:00:00Z' };
+  assert.equal(accessOf(paid, env, cloud.now()).allowed, true);
+  assert.equal(accessOf({ ...paid, status: 'cancelled' }, env, cloud.now()).allowed, false);
+  assert.equal(accessOf({ ...paid, paid_until: '2026-12-01T00:00:00Z' }, env, cloud.now()).allowed, false);
+});
+
+test('cloud receipts go to the account address and respect the smaller upload limit', async () => {
+  const { cloud, raw } = await embeddedCloud();
+  await raw.exec((await import('../src/cloud/tenants.ts')).CONTROL_SCHEMA);
+  const account = await ensureAccount(cloud.connect, env, alice);
+  const sent: { to: string }[] = [];
+  const mail = async (m: { to: string }) => {
+    sent.push(m);
+    return { messageId: '<m1>' };
+  };
+  await withTenant(
+    cloud.connect,
+    env,
+    account,
+    mail as never,
+    async (ctx) => {
+      await store.saveBusiness(ctx.db, { name: 'Alice' });
+      const expense = await expenses.recordExpense(ctx, { date: '2026-11-10', vendor: 'NS', amount: 21.8, vat_amount: 1.8 });
+      assert.match(expense.receipt_help, new RegExp(`https://bookiz.test/k/${account.tenant}/bon/K2026-001/`));
+      const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+      const stored = await expenses.attachReceipt(ctx, expense.ref, { content_base64: png.toString('base64') });
+      assert.equal(stored.receipt.archive, 'email');
+      const big = await expenses.recordExpense(ctx, { date: '2026-11-11', vendor: 'X', amount: 5, vat_amount: 0 });
+      const tooBig = Buffer.concat([png, Buffer.alloc(4 * 1024 * 1024)]).toString('base64');
+      await assert.rejects(expenses.attachReceipt(ctx, big.ref, { content_base64: tooBig }), /groter dan 4 MB/);
+    },
+    cloud.now,
+  );
+  assert.equal(sent[0]?.to, 'alice@example.test');
+});
+
+function stripeHeader(body: string, secret: string, at: number): string {
+  return `t=${at},v1=${createHmac('sha256', secret).update(`${at}.${body}`).digest('hex')}`;
+}
+
+test('only Stripe can activate a subscription, and only once per event', async () => {
+  const { cloud, raw } = await embeddedCloud();
+  const server = createServer((req, res) => void handle(cloud, req, res)).listen(0);
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    assert.equal((await fetch(`${base}/api/health`)).status, 200);
+    const meta = (await (await fetch(`${base}/.well-known/oauth-protected-resource/mcp`)).json()) as Record<string, any>;
+    assert.deepEqual(meta.authorization_servers, ['https://project.supabase.test/auth/v1']);
+
+    const unauthorized = await fetch(`${base}/mcp`, { method: 'POST', body: '{}' });
+    assert.equal(unauthorized.status, 401);
+    assert.match(unauthorized.headers.get('www-authenticate') ?? '', /resource_metadata="https:\/\/bookiz\.test\/\.well-known\/oauth-protected-resource\/mcp"/);
+
+    const account = await ensureAccount(cloud.connect, env, alice);
+    const event = JSON.stringify({
+      id: 'evt_1',
+      type: 'checkout.session.completed',
+      data: { object: { payment_status: 'paid', client_reference_id: alice.id, customer: 'cus_1' } },
+    });
+    const at = Math.floor(cloud.now().getTime() / 1000);
+
+    const forged = await fetch(`${base}/api/stripe/webhook`, { method: 'POST', body: event, headers: { 'stripe-signature': stripeHeader(event, 'wrong-secret', at) } });
+    assert.equal(forged.status, 400);
+    const stale = await fetch(`${base}/api/stripe/webhook`, { method: 'POST', body: event, headers: { 'stripe-signature': stripeHeader(event, 'whsec_test_secret', at - 3600) } });
+    assert.equal(stale.status, 400);
+    const control = await cloud.connect();
+    assert.equal((await findAccount(control, alice.id))?.status, 'trial');
+
+    const good = { method: 'POST', body: event, headers: { 'stripe-signature': stripeHeader(event, 'whsec_test_secret', at) } };
+    assert.equal((await fetch(`${base}/api/stripe/webhook`, good)).status, 200);
+    const active = await findAccount(control, alice.id);
+    assert.equal(active?.status, 'active');
+    assert.equal(active?.stripe_customer_id, 'cus_1');
+    const paidUntil = active?.paid_until;
+    assert.ok(paidUntil && new Date(paidUntil) > new Date('2027-11-16T00:00:00Z'));
+
+    // Stripe may deliver the same event again; it must not extend the subscription twice.
+    assert.equal((await fetch(`${base}/api/stripe/webhook`, good)).status, 200);
+    assert.equal((await findAccount(control, alice.id))?.paid_until, paidUntil);
+
+    assert.equal((await fetch(`${base}/k/${'0'.repeat(20)}/factuur/2026-001/abc.pdf`)).status, 404);
+    assert.equal((await fetch(`${base}/k/${account.tenant}/factuur/2026-001/${'a'.repeat(32)}.pdf`)).status, 404);
+    const crossSite = await fetch(`${base}/app/logout`, { method: 'POST', headers: { origin: 'https://evil.example' } });
+    assert.equal(crossSite.status, 403);
+    assert.equal(verifyStripeSignature('s', Buffer.from('x'), 'garbage', at), false);
+    void raw;
+  } finally {
+    server.close();
+    server.closeAllConnections();
+  }
+});

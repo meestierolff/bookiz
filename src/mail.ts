@@ -15,7 +15,7 @@ export type Mail = {
 export type Mailer = (mail: Mail) => Promise<{ messageId: string }>;
 
 /** SMTP only: works with Brevo, any other provider, or your own mail server. */
-export function createMailer(config: Config): Mailer {
+export function createMailer(config: Pick<Config, 'smtpUrl' | 'mailFrom'>): Mailer {
   return async (mail) => {
     if (!config.smtpUrl || !config.mailFrom) {
       throw new BookizError(

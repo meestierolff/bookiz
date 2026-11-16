@@ -1,0 +1,371 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createClient } from '@supabase/supabase-js';
+import { needsReceipt } from '../app/expenses.ts';
+import * as reports from '../app/reports.ts';
+import { yearOf } from '../core/dates.ts';
+import { BookizError } from '../errors.ts';
+import { fail, handleDocumentLink, handleMcp, readBody, send, sendHtml } from '../http.ts';
+import { createMailer, type Mailer } from '../mail.ts';
+import { uploadLink } from '../receipts.ts';
+import { availableYears } from '../rules.ts';
+import { VERSION } from '../server.ts';
+import * as store from '../store.ts';
+import {
+  bearerToken,
+  createLoginCode,
+  currentSession,
+  type Session,
+  sessionCookies,
+  verifyAccessToken,
+  verifyLoginCode,
+} from './auth.ts';
+import { type CloudEnv, loadCloudEnv } from './env.ts';
+import { codePage, consentPage, dashboardPage, loginMail, loginPage, messagePage } from './pages.ts';
+import {
+  type Account,
+  accessOf,
+  type Connector,
+  ensureAccount,
+  ensureControlSchema,
+  pgConnector,
+  tenantConfig,
+  withTenant,
+} from './tenants.ts';
+
+export type Cloud = { env: CloudEnv; connect: Connector; mail: Mailer; now: () => Date };
+
+let ready: Promise<void> | undefined;
+
+export function createCloud(env: CloudEnv = loadCloudEnv()): Cloud {
+  return { env, connect: pgConnector(env), mail: createMailer(env), now: () => new Date() };
+}
+
+function redirect(res: ServerResponse, location: string, cookies?: string[]): void {
+  res.writeHead(303, { location, 'cache-control': 'no-store', ...(cookies ? { 'set-cookie': cookies } : {}) });
+  res.end();
+}
+
+/** Only ever send a signed-in browser back to our own pages. */
+function safeNext(value: string | null | undefined): string {
+  if (value && /^\/(app|oauth\/consent)(\?[\w=&%.~-]*)?$/.test(value)) return value;
+  return '/app';
+}
+
+/** State-changing requests must come from our own pages, not from a form on another site. */
+function sameOrigin(cloud: Cloud, req: IncomingMessage): boolean {
+  const origin = req.headers.origin;
+  return typeof origin === 'string' && origin === new URL(cloud.env.publicUrl).origin;
+}
+
+async function form(req: IncomingMessage): Promise<URLSearchParams> {
+  return new URLSearchParams((await readBody(req, 64 * 1024)).toString('utf8'));
+}
+
+function clientIp(req: IncomingMessage): string {
+  return String(req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '').split(',')[0]!.trim();
+}
+
+/** Sign-in mails go to any address someone types, so cap them per address and per caller. */
+async function allowLogin(cloud: Cloud, email: string, ip: string): Promise<boolean> {
+  const db = await cloud.connect();
+  try {
+    return await db.transaction(async (tx) => {
+      await tx.query("select pg_advisory_xact_lock(hashtext('bookiz-login'))");
+      await tx.query("delete from bookiz_cloud.login_attempt where at < now() - interval '1 day'");
+      const rows = await tx.query<{ by_email: number; by_ip: number }>(
+        `select count(*) filter (where email = $1)::int as by_email, count(*) filter (where ip = $2)::int as by_ip
+         from bookiz_cloud.login_attempt where at > now() - interval '15 minutes'`,
+        [email, ip],
+      );
+      if ((rows[0]?.by_email ?? 0) >= 3 || (rows[0]?.by_ip ?? 0) >= 10) return false;
+      await tx.query('insert into bookiz_cloud.login_attempt (email, ip) values ($1, $2)', [email, ip]);
+      return true;
+    });
+  } finally {
+    await db.close();
+  }
+}
+
+async function accountByTenant(cloud: Cloud, tenant: string): Promise<Account | null> {
+  if (!/^[0-9a-f]{20}$/.test(tenant)) return null;
+  const db = await cloud.connect();
+  try {
+    const rows = await db.query<Account>(
+      `select user_id, email, tenant, status, trial_ends_at, paid_until, stripe_customer_id, schema_version, created_at
+       from bookiz_cloud.account where tenant = $1`,
+      [tenant],
+    );
+    return rows[0] ?? null;
+  } finally {
+    await db.close();
+  }
+}
+
+function subscribeUrl(cloud: Cloud, account: Account): string | null {
+  if (!cloud.env.stripePaymentLink) return null;
+  const url = new URL(cloud.env.stripePaymentLink);
+  url.searchParams.set('client_reference_id', account.user_id);
+  url.searchParams.set('prefilled_email', account.email);
+  return url.toString();
+}
+
+/** A Supabase client acting as the signed-in owner, for the OAuth consent calls. */
+async function supabaseFor(cloud: Cloud, session: Session) {
+  const client = createClient(cloud.env.supabaseUrl, cloud.env.supabasePublishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  await client.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token });
+  return client;
+}
+
+async function mcp(cloud: Cloud, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const token = bearerToken(req);
+  const user = token ? await verifyAccessToken(cloud.env, token) : null;
+  if (!user || !user.email) {
+    // This challenge is how an assistant discovers where to sign in.
+    const metadata = `${cloud.env.publicUrl}/.well-known/oauth-protected-resource/mcp`;
+    res.writeHead(401, {
+      'www-authenticate': `Bearer resource_metadata="${metadata}"`,
+      'content-type': 'application/json',
+      'cache-control': 'no-store',
+    });
+    res.end(JSON.stringify({ error: 'unauthorized', error_description: 'Sign in to Bookiz to use this server.' }));
+    return;
+  }
+  const account = await ensureAccount(cloud.connect, cloud.env, user);
+  await withTenant(cloud.connect, cloud.env, account, cloud.mail, (ctx) => handleMcp(ctx, req, res), cloud.now);
+}
+
+async function dashboard(cloud: Cloud, req: IncomingMessage, res: ServerResponse, session: Session): Promise<void> {
+  const account = await ensureAccount(cloud.connect, cloud.env, session.user);
+  const access = accessOf(account, cloud.env, cloud.now());
+  const data = await withTenant(
+    cloud.connect,
+    cloud.env,
+    account,
+    cloud.mail,
+    async (ctx) => {
+      const expenses = (await store.listExpenses(ctx.db)).filter(needsReceipt);
+      const invoices = await store.listInvoices(ctx.db);
+      const years = new Set([yearOf(new Date(cloud.now()).toISOString().slice(0, 10))]);
+      for (const invoice of invoices) years.add(yearOf(invoice.issue_date));
+      for (const expense of await store.listExpenses(ctx.db)) years.add(yearOf(expense.date));
+      return {
+        overview: (await reports.overview(ctx)) as Record<string, unknown>,
+        missing: expenses.slice(0, 20).map((e) => ({ ref: e.ref, vendor: e.vendor, date: e.date, link: uploadLink(ctx.config, e.ref) })),
+        years: [...years].filter((year) => availableYears().includes(year)).sort(),
+      };
+    },
+    cloud.now,
+  );
+  sendHtml(res, 200, (nonce) =>
+    dashboardPage(nonce, {
+      account,
+      access: access.allowed,
+      mcpUrl: `${cloud.env.publicUrl}/mcp`,
+      subscribeUrl: subscribeUrl(cloud, account),
+      overview: data.overview,
+      missingReceipts: data.missing,
+      years: data.years,
+    }),
+  );
+}
+
+async function consent(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
+  const session = await currentSession(cloud.env, req, res);
+  if (req.method === 'GET') {
+    const id = url.searchParams.get('authorization_id') ?? '';
+    if (!/^[\w-]{6,200}$/.test(id)) return sendHtml(res, 400, (n) => messagePage(n, 'Dit verzoek klopt niet', 'De koppeling met je assistent is onvolledig. Start het koppelen opnieuw vanuit je assistent.'));
+    if (!session) return redirect(res, `/app/login?next=${encodeURIComponent(`/oauth/consent?authorization_id=${id}`)}`);
+    const { data, error } = await (await supabaseFor(cloud, session)).auth.oauth.getAuthorizationDetails(id);
+    if (error || !data) {
+      return sendHtml(res, 400, (n) => messagePage(n, 'Dit verzoek is verlopen', 'Start het koppelen opnieuw vanuit je assistent.'));
+    }
+    // Supabase answers with a redirect when this client was approved before.
+    const details = data as unknown as Record<string, any>;
+    if (!details.authorization_id && typeof details.redirect_url === 'string') return redirect(res, details.redirect_url);
+    let host = 'onbekend adres';
+    try {
+      host = new URL(String(details.redirect_uri ?? details.redirect_url ?? '')).host;
+    } catch {
+      // Keep the warning text; the owner decides.
+    }
+    return sendHtml(res, 200, (nonce) =>
+      consentPage(nonce, {
+        authorizationId: id,
+        clientName: String(details.client?.name ?? details.client?.client_name ?? 'Een onbekende toepassing'),
+        clientUri: details.client?.uri ?? null,
+        redirectHost: host,
+        email: session.user.email,
+      }),
+    );
+  }
+  if (req.method !== 'POST' || !sameOrigin(cloud, req)) return send(res, 403, 'Niet toegestaan.');
+  if (!session) return redirect(res, '/app/login');
+  const fields = await form(req);
+  const id = fields.get('authorization_id') ?? '';
+  const oauth = (await supabaseFor(cloud, session)).auth.oauth;
+  const { data, error } = fields.get('decision') === 'approve' ? await oauth.approveAuthorization(id) : await oauth.denyAuthorization(id);
+  const target = (data as unknown as Record<string, any> | null)?.redirect_url ?? (data as unknown as Record<string, any> | null)?.redirect_to;
+  if (error || typeof target !== 'string') {
+    return sendHtml(res, 400, (n) => messagePage(n, 'Dat lukte niet', 'De koppeling kon niet worden afgerond. Start het koppelen opnieuw vanuit je assistent.'));
+  }
+  return redirect(res, target);
+}
+
+async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url: URL, parts: string[]): Promise<void> {
+  const page = parts[1] ?? '';
+  if (page === 'login' && req.method === 'GET') {
+    return sendHtml(res, 200, (nonce) => loginPage(nonce, { next: safeNext(url.searchParams.get('next')) }));
+  }
+  if (req.method === 'POST' && !sameOrigin(cloud, req)) return send(res, 403, 'Niet toegestaan.');
+
+  if (page === 'login' && req.method === 'POST') {
+    const fields = await form(req);
+    const email = (fields.get('email') ?? '').trim().toLowerCase();
+    const next = safeNext(fields.get('next'));
+    if (!/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(email)) {
+      return sendHtml(res, 400, (nonce) => loginPage(nonce, { next, error: 'Dat is geen geldig e-mailadres.' }));
+    }
+    if (!(await allowLogin(cloud, email, clientIp(req)))) {
+      return sendHtml(res, 429, (nonce) => loginPage(nonce, { next, error: 'Te veel pogingen. Probeer het over een kwartier opnieuw.' }));
+    }
+    const code = await createLoginCode(cloud.env, email);
+    await cloud.mail({ to: email, ...loginMail(code), attachments: [] });
+    return sendHtml(res, 200, (nonce) => codePage(nonce, { email, next }));
+  }
+
+  if (page === 'verify' && req.method === 'POST') {
+    const fields = await form(req);
+    const email = (fields.get('email') ?? '').trim().toLowerCase();
+    const next = safeNext(fields.get('next'));
+    try {
+      const session = await verifyLoginCode(cloud.env, email, (fields.get('code') ?? '').replace(/\s/g, ''));
+      return redirect(res, next, sessionCookies(session));
+    } catch (error) {
+      if (!(error instanceof BookizError)) throw error;
+      return sendHtml(res, 400, (nonce) => codePage(nonce, { email, next, error: error.message }));
+    }
+  }
+
+  if (page === 'logout' && req.method === 'POST') return redirect(res, '/', sessionCookies(null));
+
+  const session = await currentSession(cloud.env, req, res);
+  if (!session) return redirect(res, '/app/login');
+
+  if (page === 'export' && req.method === 'GET') {
+    const year = Number(url.searchParams.get('year'));
+    if (!availableYears().includes(year)) return send(res, 400, 'Onbekend jaar.');
+    const account = await ensureAccount(cloud.connect, cloud.env, session.user);
+    const data = await withTenant(cloud.connect, cloud.env, account, cloud.mail, (ctx) => reports.exportBooks(ctx, { year }), cloud.now);
+    return send(res, 200, JSON.stringify(data, null, 2), 'application/json; charset=utf-8', {
+      'content-disposition': `attachment; filename="bookiz-${year}.json"`,
+    });
+  }
+  if (page === '' && req.method === 'GET') return dashboard(cloud, req, res, session);
+  return send(res, 404, 'Niet gevonden.');
+}
+
+/** Stripe signs the raw body; anything else claiming to be a payment is ignored. */
+export function verifyStripeSignature(secret: string, body: Buffer, header: string, nowSeconds: number): boolean {
+  const fields = Object.fromEntries(header.split(',').map((pair) => pair.split('=') as [string, string]));
+  const timestamp = Number(fields.t);
+  if (!fields.v1 || !Number.isFinite(timestamp) || Math.abs(nowSeconds - timestamp) > 300) return false;
+  const expected = Buffer.from(createHmac('sha256', secret).update(`${timestamp}.`).update(body).digest('hex'));
+  const given = Buffer.from(fields.v1);
+  return expected.length === given.length && timingSafeEqual(expected, given);
+}
+
+async function stripeWebhook(cloud: Cloud, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (req.method !== 'POST' || !cloud.env.stripeWebhookSecret) return send(res, 404, 'Niet gevonden.');
+  const body = await readBody(req, 1024 * 1024);
+  const signature = String(req.headers['stripe-signature'] ?? '');
+  if (!verifyStripeSignature(cloud.env.stripeWebhookSecret, body, signature, Math.floor(cloud.now().getTime() / 1000))) {
+    return send(res, 400, 'Invalid signature');
+  }
+  const event = JSON.parse(body.toString('utf8')) as { id: string; type: string; data: { object: Record<string, any> } };
+  const object = event.data.object;
+  const db = await cloud.connect();
+  try {
+    await db.transaction(async (tx) => {
+      // Stripe delivers at least once; handle each event exactly once.
+      const fresh = await tx.query('insert into bookiz_cloud.stripe_event (id, type) values ($1, $2) on conflict (id) do nothing returning id', [
+        event.id,
+        event.type,
+      ]);
+      if (fresh.length === 0) return;
+      if (event.type === 'checkout.session.completed' && object.payment_status === 'paid' && typeof object.client_reference_id === 'string') {
+        await tx.query(
+          `update bookiz_cloud.account set status = 'active', stripe_customer_id = $2,
+             paid_until = greatest(coalesce(paid_until, now()), now()) + interval '1 year 7 days'
+           where user_id::text = $1`,
+          [object.client_reference_id, typeof object.customer === 'string' ? object.customer : null],
+        );
+      } else if (event.type === 'invoice.paid' && object.billing_reason === 'subscription_cycle' && typeof object.customer === 'string') {
+        await tx.query(
+          `update bookiz_cloud.account set status = 'active', paid_until = greatest(coalesce(paid_until, now()), now()) + interval '1 year 7 days'
+           where stripe_customer_id = $1`,
+          [object.customer],
+        );
+      } else if (event.type === 'invoice.payment_failed' && typeof object.customer === 'string') {
+        await tx.query(`update bookiz_cloud.account set status = 'past_due' where stripe_customer_id = $1 and status = 'active'`, [object.customer]);
+      } else if (event.type === 'customer.subscription.deleted' && typeof object.customer === 'string') {
+        // Access simply runs out at paid_until; nothing is deleted.
+        await tx.query(`update bookiz_cloud.account set status = 'cancelled' where stripe_customer_id = $1`, [object.customer]);
+      }
+    });
+  } finally {
+    await db.close();
+  }
+  send(res, 200, 'ok');
+}
+
+/** Every request to Bookiz Cloud that is not a static page ends up here. */
+export async function handle(cloud: Cloud, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  try {
+    const url = new URL(req.url ?? '/', cloud.env.publicUrl);
+    const parts = url.pathname.split('/').filter(Boolean);
+
+    if (url.pathname === '/api/health') {
+      return send(res, 200, JSON.stringify({ ok: true, version: VERSION, rules: availableYears() }), 'application/json');
+    }
+    if (parts[0] === '.well-known' && parts[1] === 'oauth-protected-resource') {
+      return send(
+        res,
+        200,
+        JSON.stringify({
+          resource: `${cloud.env.publicUrl}/mcp`,
+          authorization_servers: [`${cloud.env.supabaseUrl}/auth/v1`],
+          bearer_methods_supported: ['header'],
+          resource_name: 'Bookiz',
+        }),
+        'application/json',
+        { 'cache-control': 'public, max-age=300', 'access-control-allow-origin': '*' },
+      );
+    }
+
+    ready ??= ensureControlSchema(cloud.connect).catch((error) => {
+      ready = undefined;
+      throw error;
+    });
+    await ready;
+
+    if (parts[0] === 'mcp' && parts.length === 1) return await mcp(cloud, req, res);
+    if (parts[0] === 'api' && parts[1] === 'stripe' && parts[2] === 'webhook') return await stripeWebhook(cloud, req, res);
+    if (parts[0] === 'oauth' && parts[1] === 'consent') return await consent(cloud, req, res, url);
+    if (parts[0] === 'app') return await app(cloud, req, res, url, parts);
+
+    if (parts[0] === 'k' && parts[1]) {
+      const account = await accountByTenant(cloud, parts[1]);
+      if (!account) return send(res, 404, 'Niet gevonden.');
+      const handled = await withTenant(cloud.connect, cloud.env, account, cloud.mail, (ctx) => handleDocumentLink(ctx, req, res, parts.slice(2)), cloud.now);
+      if (handled) return;
+    }
+    return send(res, 404, 'Niet gevonden.');
+  } catch (error) {
+    fail(res, error);
+  }
+}
+
+export { tenantConfig };
