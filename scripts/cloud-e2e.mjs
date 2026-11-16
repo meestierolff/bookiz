@@ -44,8 +44,10 @@ async function oauthToken(user) {
   const cross = await fetch(SITE + '/oauth/consent', { method: 'POST', headers: { cookie: user.cookie, origin: 'https://evil.example', 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ authorization_id: id, decision: 'approve' }), redirect: 'manual' });
   ok('approval from another site is refused', cross.status === 403);
   const approve = await fetch(SITE + '/oauth/consent', { method: 'POST', headers: { cookie: user.cookie, origin: SITE, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ authorization_id: id, decision: 'approve' }), redirect: 'manual' });
-  const back = approve.headers.get('location') ?? '';
-  ok('approval returns to the client with a code', approve.status === 303 && back.startsWith('http://localhost:9999/callback?') && back.includes('code='), back.slice(0, 60) || `status ${approve.status} ${(await approve.text()).slice(0, 150)}`);
+  // The approval answers with a page that forwards the browser, because a redirect to another site from a form post is blocked by the content policy.
+  const forward = await approve.text();
+  const back = (forward.match(/id="go" href="([^"]+)"/)?.[1] ?? '').replaceAll('&amp;', '&');
+  ok('approval hands the browser back to the client with a code', approve.status === 200 && back.startsWith('http://localhost:9999/callback?') && back.includes('code='), back.slice(0, 60) || `status ${approve.status} ${forward.slice(0, 150)}`);
   const code = new URL(back).searchParams.get('code');
   const tok = await (await fetch(AUTH + '/oauth/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: 'http://localhost:9999/callback', client_id: reg.client_id, code_verifier: verifier }) })).json();
   ok('code is exchanged for a token', Boolean(tok.access_token), tok.access_token ? '' : JSON.stringify(tok).slice(0, 200));
