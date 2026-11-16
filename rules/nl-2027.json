@@ -1,0 +1,78 @@
+{
+  "year": 2027,
+  "status": "voorlopig",
+  "checked_on": "2026-11-16",
+  "rules": {
+    "btw_tarief_hoog": {
+      "title": "Algemeen btw-tarief",
+      "value": 21,
+      "unit": "%",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/tarieven_en_vrijstellingen/",
+      "quote": "Het algemene btw-tarief is 21%. Voor sommige goederen en diensten geldt het lage tarief van 9%, het 0%-tarief of een vrijstelling.",
+      "note": "Overgenomen van een pagina zonder jaartal, zoals die op de controledatum gold. Opnieuw controleren zodra de Belastingdienst de cijfers voor 2027 publiceert."
+    },
+    "btw_tarief_laag": {
+      "title": "Laag btw-tarief",
+      "value": 9,
+      "unit": "%",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/tarieven_en_vrijstellingen/",
+      "quote": "Het algemene btw-tarief is 21%. Voor sommige goederen en diensten geldt het lage tarief van 9%, het 0%-tarief of een vrijstelling.",
+      "note": "Overgenomen van een pagina zonder jaartal, zoals die op de controledatum gold. Opnieuw controleren zodra de Belastingdienst de cijfers voor 2027 publiceert."
+    },
+    "btw_horeca_niet_aftrekbaar": {
+      "title": "Btw op eten en drinken in de horeca is niet aftrekbaar",
+      "value": true,
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/btw_aftrekken/welke_btw_is_aftrekbaar/bijzondere_situaties/uitgaven_in_de_horeca",
+      "quote": "In de volgende situaties kunt u de btw hierover niet aftrekken: Het eten en drinken wordt genuttigd in een horecagelegenheid. Een cateraar verzorgt het eten en drinken in een ruimte die speciaal daarvoor is ingericht.",
+      "note": "Bookiz past dit toe op de categorie eten_drinken_horeca. De uitzondering voor doorberekende kosten en de grens van € 227 per persoon voor relatiegeschenken zijn niet ingebouwd. Overgenomen van een pagina zonder jaartal, zoals die op de controledatum gold. Opnieuw controleren zodra de Belastingdienst de cijfers voor 2027 publiceert."
+    },
+    "btw_correctiegrens": {
+      "title": "Correctie in de eerstvolgende aangifte tot dit bedrag; daarboven suppletie",
+      "value": 1000,
+      "unit": "EUR",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/btw_aangifte_doen_en_betalen/aangifte_corrigeren/aangifte_corrigeren",
+      "quote": "Hebt u bij uw btw-aangifte een bedrag van maximaal €1000 te veel of te weinig ingevuld? Dan geeft u dat bedrag op in uw eerstvolgende btw-aangifte.",
+      "note": "Overgenomen van een pagina zonder jaartal, zoals die op de controledatum gold. Opnieuw controleren zodra de Belastingdienst de cijfers voor 2027 publiceert."
+    },
+    "kor_omzetgrens": {
+      "title": "Omzetgrens kleineondernemersregeling (KOR) per kalenderjaar",
+      "value": 20000,
+      "unit": "EUR",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/nl/btw/content/kor-voorwaarden",
+      "quote": "Per kalenderjaar hebt u een omzet van maximaal € 20.000. De maximale omzet van € 20.000 geldt voor het kalenderjaar waarin u zich aanmeldt, én voor het kalenderjaar daarvóór.",
+      "note": "Bij overschrijding moet je je direct afmelden en is de overschrijdende levering of dienst volledig belast (belastingdienst.nl, afmelden-kor). Overgenomen van een pagina zonder jaartal, zoals die op de controledatum gold. Opnieuw controleren zodra de Belastingdienst de cijfers voor 2027 publiceert."
+    },
+    "urencriterium": {
+      "title": "Urencriterium",
+      "value": 1225,
+      "unit": "uur",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/inkomstenbelasting/inkomstenbelasting_voor_ondernemers/voorwaarden_urencriterium",
+      "quote": "U besteedt in het kalenderjaar minimaal 1.225 uren aan uw onderneming(en).",
+      "note": "Wie geen starter is moet ook meer tijd aan de onderneming besteden dan aan ander werk. Bookiz toetst dit niet; de ondernemer geeft zelf op of het criterium is gehaald. Overgenomen van een pagina zonder jaartal, zoals die op de controledatum gold. Opnieuw controleren zodra de Belastingdienst de cijfers voor 2027 publiceert."
+    },
+    "investering_drempel": {
+      "title": "Grens tussen kosten en investering per bedrijfsmiddel",
+      "value": 450,
+      "unit": "EUR",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/inkomstenbelasting/inkomstenbelasting_voor_ondernemers/afschrijving/wat_is_afschrijven",
+      "quote": "Koopt u een bedrijfsmiddel voor minder dan € 450? Dan trekt u het bedrag wel in 1 keer af als kosten.",
+      "note": "Exclusief btw als je de btw kunt terugkrijgen, anders inclusief btw. Overgenomen van een pagina zonder jaartal, zoals die op de controledatum gold. Opnieuw controleren zodra de Belastingdienst de cijfers voor 2027 publiceert."
+    },
+    "afschrijving_max_pct": {
+      "title": "Maximale afschrijving per jaar",
+      "value": 20,
+      "unit": "% van de aanschafkosten",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/inkomstenbelasting/inkomstenbelasting_voor_ondernemers/afschrijving/hoe_berekent_u_het_bedrag_van_de_afschrijving",
+      "quote": "De afschrijving is per jaar maximaal 20% van de aanschafkosten van het bedrijfsmiddel. Voor goodwill geldt een percentage van maximaal 10%.",
+      "note": "Formule: (aanschafkosten - restwaarde) : vermoedelijke gebruiksduur, naar rato van het deel van het jaar dat het bedrijfsmiddel is gebruikt. Goodwill ondersteunt Bookiz niet. Overgenomen van een pagina zonder jaartal, zoals die op de controledatum gold. Opnieuw controleren zodra de Belastingdienst de cijfers voor 2027 publiceert."
+    },
+    "bewaarplicht_jaren": {
+      "title": "Bewaartermijn van de administratie",
+      "value": 7,
+      "unit": "jaar",
+      "source": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/administratie_bijhouden/facturen_maken/uw_facturen_bewaren",
+      "quote": "U mag facturen en bonnetjes ook scannen en digitaal bewaren. Er moet dan wel sprake zijn van een juiste en volledige weergave van het origineel. Belangrijk hierbij is dat de echtheidskenmerken ook worden opgeslagen.",
+      "note": "Een foto of scan mag het papieren origineel vervangen als die volledig en leesbaar is en de hele termijn beschikbaar blijft. Voor onroerende zaken geldt tien jaar. Overgenomen van een pagina zonder jaartal, zoals die op de controledatum gold. Opnieuw controleren zodra de Belastingdienst de cijfers voor 2027 publiceert."
+    }
+  }
+}

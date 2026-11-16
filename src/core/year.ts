@@ -1,5 +1,5 @@
 import type { CreditBracket, KiaBracket, RuleSet, TaxBracket } from '../rules.ts';
-import { rulesFor } from '../rules.ts';
+import { rulesFor, yearly } from '../rules.ts';
 import { categoryFor } from './categories.ts';
 import { businessCost, deductibleCost, depreciate, type Depreciation } from './costs.ts';
 import { yearOf } from './dates.ts';
@@ -50,7 +50,14 @@ export function computeYear(input: {
 }): YearReport {
   const { year, business, taxYear } = input;
   const rules = rulesFor(year);
-  const r = rules.rules;
+  // Everything below needs the yearly figures; refuse as a whole when one is missing.
+  const r = {
+    ...rules.rules,
+    zelfstandigenaftrek: yearly(rules, 'zelfstandigenaftrek'),
+    startersaftrek: yearly(rules, 'startersaftrek'),
+    mkb_winstvrijstelling: yearly(rules, 'mkb_winstvrijstelling'),
+    kia: yearly(rules, 'kia'),
+  };
   const notes: string[] = [];
 
   const invoices = input.invoices.filter((i) => i.status === 'final' && !i.imported && yearOf(i.issue_date) === year);

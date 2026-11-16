@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type RuleKey, type RuleSet, rulesFor } from '../src/rules.ts';
 import { type Company, privacy, terms } from './legal.ts';
+import { switchBody, switchFaq, type SwitchFacts } from './switch.ts';
 
 /**
  * Builds the static site into web/dist. Prices, payment links and the tax
@@ -17,7 +18,8 @@ const site = JSON.parse(readFileSync(join(here, 'site.json'), 'utf8')) as {
   repo_url: string;
   contact_email: string;
   company: { name: string; kvk: string; vat_id: string; address: string };
-  cloud: { price_year_excl: number; stripe_link: string };
+  /** `open` goes true once sign-in mail works; until then the site does not invite anyone to sign up. */
+  cloud: { price_year_excl: number; stripe_link: string; open: boolean };
   dfy: { price_year_excl: number; founding_price_year_excl: number; founding_seats: number; stripe_link: string };
 };
 
@@ -77,8 +79,12 @@ const faq: [string, string][] = [
     'Dan vraag je je assistent om een export. Je krijgt alle facturen, uitgaven, aangiftes en het jaaroverzicht in één bestand. De software is open source, dus je kunt haar ook zelf blijven draaien.',
   ],
   [
-    'Wat betekent voorverkoop?',
-    'Cloud en Done for you zijn er nog niet. De gratis versie die je zelf host wel. Wie vooruit betaalt, laat zien dat er vraag is en krijgt als eerste toegang. Je abonnementsjaar begint pas op de dag dat je toegang krijgt, en tot die dag krijg je je geld terug als je je bedenkt.',
+    'Kan ik overstappen vanuit mijn huidige boekhoudpakket?',
+    'Ja. Het eenvoudigst is per 1 januari: je neemt je klanten, je onbetaalde facturen en je bedrijfsmiddelen mee, en bewaart je oude jaren als export. Op de pagina Overstappen staat het stap voor stap.',
+  ],
+  [
+    'Wat betekent voorverkoop bij Done for you?',
+    'Done for you is er nog niet. De aangiftes worden gedaan door een zelfstandige boekhouder, en we starten zodra die samenwerking rond is.',
   ],
 ];
 
@@ -116,9 +122,11 @@ ${(options.jsonLd ?? []).map((data) => `<script type="application/ld+json">${JSO
 <header class="wrap top">
   <a class="brand" href="/"><img src="/logo.png" alt="" width="34" height="34">Bookiz</a>
   <nav aria-label="Hoofdmenu">
+    <a href="/overstappen/">Overstappen</a>
     <a href="/#prijzen">Prijzen</a>
     <a href="/belastingregels-${YEAR}/">Regels ${YEAR}</a>
     ${site.repo_url ? `<a href="${esc(site.repo_url)}">GitHub</a>` : ''}
+    ${site.cloud.open ? '<a class="button" href="/app">Inloggen</a>' : ''}
   </nav>
 </header>
 ${options.body}
@@ -246,17 +254,17 @@ ${highlighted
         <p class="small"></p>
       </div>
       <div class="plan featured">
-        <h3>Cloud <span class="presale">voorverkoop</span></h3>
+        <h3>Cloud${site.cloud.open ? '' : ' <span class="presale">binnenkort</span>'}</h3>
         <p class="price">${euro(site.cloud.price_year_excl)} <small>per jaar</small></p>
-        <p class="incl">${euro(cloudIncl)} inclusief btw</p>
+        <p class="incl">${euro(cloudIncl)} inclusief btw. Eerste dertig dagen gratis.</p>
         <p class="what">Wij hosten het. Jij koppelt alleen je assistent.</p>
         <ul>
-          <li>Hosting en dagelijkse back-ups</li>
+          <li>Inloggen vanuit Claude, ChatGPT of Grok</li>
           <li>Facturen versturen vanaf een betrouwbaar adres</li>
-          <li>Bonnen bewaren door ze te mailen of te uploaden</li>
+          <li>Bonnen naar je eigen mailbox, geen opslag bij ons</li>
         </ul>
-        ${payButton(site.cloud.stripe_link, 'Bestel Cloud vooruit', 'Cloud')}
-        <p class="small">Cloud is nog niet beschikbaar. Je jaar begint op de dag dat je toegang krijgt; tot die dag krijg je je geld terug als je je bedenkt.</p>
+        ${site.cloud.open ? '<a class="button pay" href="/app">Probeer dertig dagen gratis</a>' : '<span class="button waiting">Opent binnenkort</span>'}
+        <p class="small">${site.cloud.open ? 'Geen betaalgegevens nodig om te beginnen. Daarna een jaarabonnement; binnen dertig dagen na betaling krijg je je geld terug als het niet bevalt.' : 'De techniek draait; we zetten de deur open zodra de laatste controles klaar zijn.'}</p>
       </div>
       <div class="plan">
         <h3>Done for you <span class="presale">voorverkoop</span></h3>
@@ -367,6 +375,49 @@ const extraPages: Record<string, string> = {
     'Kort: de website volgt je niet, je bonnen bewaren wij niet, en je administratie staat in de Europese Unie.',
     privacy(company),
   ),
+  overstappen: (() => {
+    const facts: SwitchFacts = {
+      retentionYears: rules.rules.bewaarplicht_jaren.value,
+      cloudPrice: site.cloud.price_year_excl,
+      q4Deadline: '31 januari',
+      repoUrl: site.repo_url,
+    };
+    const faqs = switchFaq(facts);
+    return page({
+      path: '/overstappen/',
+      title: 'Overstappen van boekhoudprogramma per 1 januari | Bookiz',
+      description:
+        'Overstappen van boekhoudpakket als zzp’er: waarom 1 januari het beste moment is, wat je meeneemt, wat je bewaart en hoe het in vijf stappen gaat. Ook vanuit Moneybird.',
+      body: `<main class="wrap doc prose">
+  <h1>Overstappen van boekhoudprogramma per 1 januari</h1>
+  <p class="lead">Voor zzp’ers en eenmanszaken met een kleine administratie. Wat neem je mee, wat laat je achter, en in welke volgorde.</p>
+${switchBody(facts)}
+  <h2>Veelgestelde vragen</h2>
+${faqs.map(([question, answer]) => `  <h3>${esc(question)}</h3>\n  <p>${esc(answer)}</p>`).join('\n')}
+  <p class="note"><a href="/#prijzen">Bekijk wat Bookiz kost</a>${site.repo_url ? ` of <a href="${esc(site.repo_url)}">host het zelf, gratis</a>` : ''}.</p>
+</main>`,
+      jsonLd: [
+        {
+          '@context': 'https://schema.org',
+          '@type': 'HowTo',
+          name: 'Overstappen van boekhoudprogramma per 1 januari',
+          inLanguage: 'nl',
+          step: [
+            'Exporteer je oude administratie en bewaar die zeven jaar.',
+            'Doe je laatste btw-aangifte vanuit je oude pakket.',
+            'Schrijf op welke facturen nog openstaan en welke bedrijfsmiddelen je nog afschrijft.',
+            'Koppel je assistent aan Bookiz en laat je klanten, openstaande facturen en bedrijfsmiddelen overnemen.',
+            'Controleer het openstaande bedrag en zeg dan pas je oude pakket op.',
+          ].map((text, index) => ({ '@type': 'HowToStep', position: index + 1, text })),
+        },
+        {
+          '@context': 'https://schema.org',
+          '@type': 'FAQPage',
+          mainEntity: faqs.map(([question, answer]) => ({ '@type': 'Question', name: question, acceptedAnswer: { '@type': 'Answer', text: answer } })),
+        },
+      ],
+    });
+  })(),
   voorwaarden: legalPage(
     '/voorwaarden/',
     'Algemene voorwaarden',
@@ -407,7 +458,7 @@ writeFileSync(
 );
 writeFileSync(
   join(dist, 'llms.txt'),
-  `# Bookiz\n\n> Open-source boekhouding voor Nederlandse eenmanszaken met weinig facturen. Geen eigen chatbot: de gebruiker bedient Bookiz via een eigen AI-assistent over MCP. Bookiz dient geen aangiftes in bij de Belastingdienst.\n\n- [Wat Bookiz doet en kost](${site.site_url}/)\n- [Belastingregels ${YEAR} voor eenmanszaken, met bron](${site.site_url}/belastingregels-${YEAR}/)\n${site.repo_url ? `- [Broncode](${site.repo_url})\n` : ''}`,
+  `# Bookiz\n\n> Open-source boekhouding voor Nederlandse eenmanszaken met weinig facturen. Geen eigen chatbot: de gebruiker bedient Bookiz via een eigen AI-assistent over MCP. Bookiz dient geen aangiftes in bij de Belastingdienst.\n\n- [Wat Bookiz doet en kost](${site.site_url}/)\n- [Belastingregels ${YEAR} voor eenmanszaken, met bron](${site.site_url}/belastingregels-${YEAR}/)\n- [Overstappen van boekhoudprogramma per 1 januari](${site.site_url}/overstappen/)\n${site.repo_url ? `- [Broncode](${site.repo_url})\n` : ''}`,
 );
 
 console.log(`web/dist built: ${2 + Object.keys(extraPages).length} pages, ${Object.keys(rules.rules).length} rules for ${YEAR}`);

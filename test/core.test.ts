@@ -6,7 +6,7 @@ import { formatEur, roundCents, toCents } from '../src/core/money.ts';
 import type { Expense } from '../src/core/types.ts';
 import { invoiceTotals } from '../src/core/vat.ts';
 import { kiaFor } from '../src/core/year.ts';
-import { availableYears, rulesFor } from '../src/rules.ts';
+import { availableYears, rulesFor, yearly } from '../src/rules.ts';
 
 const rules = rulesFor(2026);
 
@@ -55,7 +55,7 @@ test('invoice: one btw amount per tariff, calculated on the group total', () => 
 });
 
 test('KIA 2026 follows the published table at every boundary', () => {
-  const kia = (euros: number) => kiaFor(toCents(euros), rules.rules.kia.value) / 100;
+  const kia = (euros: number) => kiaFor(toCents(euros), yearly(rules, 'kia').value) / 100;
   assert.equal(kia(2900), 0);
   assert.equal(kia(2901), 812.28);
   assert.equal(kia(71683), 20071.24);

@@ -201,7 +201,16 @@ export async function overview(ctx: Ctx) {
   }
 
   const taxYear = await store.getTaxYear(ctx.db, year);
-  const report = rules ? computeYear({ year, business, taxYear, invoices, expenses }) : null;
+  let report: ReturnType<typeof computeYear> | null = null;
+  if (rules) {
+    try {
+      report = computeYear({ year, business, taxYear, invoices, expenses });
+    } catch (error) {
+      if (!(error instanceof BookizError)) throw error;
+      // Early in a year the yearly figures may not be published; booking goes on without a profit figure.
+      actions.push(`Winst en belastingindicatie voor ${year} volgen zodra de Belastingdienst de cijfers heeft gepubliceerd.`);
+    }
+  }
   const estimate = report ? estimateTax(report, taxYear.wage_income_cents ?? 0) : null;
   if (rules && report && kor) {
     const korLimit = toCents(rules.rules.kor_omzetgrens.value);

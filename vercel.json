@@ -72,11 +72,6 @@
       "permanent": false
     },
     {
-      "source": "/overstappen",
-      "destination": "/",
-      "permanent": false
-    },
-    {
       "source": "/hoe-het-werkt",
       "destination": "/",
       "permanent": false
@@ -103,7 +98,7 @@
     },
     {
       "source": "/:brand(moneybird|jortt|e-boekhouden|financible)-alternatief",
-      "destination": "/",
+      "destination": "/overstappen/",
       "permanent": false
     }
   ],

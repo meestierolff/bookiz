@@ -284,13 +284,20 @@ test('a filed return keeps its figures, and January works before the new rules e
 
   ctx.setNow('2027-01-05T09:00:00Z');
   const january = (await reports.overview(ctx)) as Euros;
-  assert.match(january.next_actions.join(' '), /belastingregels voor 2027 ontbreken/);
   assert.match(january.next_actions.join(' '), /Btw-aangifte 2026-Q4 doen en betalen vóór 2027-01-31/);
+  // 2027 is open for booking on provisional rules; what needs unpublished figures says so.
+  assert.match(january.next_actions.join(' '), /Winst en belastingindicatie voor 2027 volgen/);
   assert.equal(january.year_to_date, null);
-  await assert.rejects(
-    expenses.recordExpense(ctx, { date: '2027-01-04', vendor: 'X', amount: 10, vat_amount: 0 }),
-    /geen belastingregels voor 2027/,
+  const booked = await expenses.recordExpense(ctx, { date: '2027-01-04', vendor: 'Kantoorhandel', amount: 121, vat_amount: 21 });
+  assert.equal(booked.vat_period, '2027-Q1');
+  const invoice2027 = await invoices.finalizeInvoice(
+    ctx,
+    (await invoices.createInvoice(ctx, { contact_id: customer, lines: [{ description: 'Werk', quantity: 1, unit_price: 500 }] })).draft_id,
   );
+  assert.equal(invoice2027.number, '2027-001', 'numbering starts again in the new year');
+  await assert.rejects(expenses.recordMileage(ctx, { date: '2027-01-04', km: 50, description: 'Klantbezoek Zwolle' }), /kilometervergoeding.*nog niet gepubliceerd/);
+  await assert.rejects(reports.yearReport(ctx, { year: 2027 }), /nog niet gepubliceerd/);
+  await assert.rejects(expenses.recordExpense(ctx, { date: '2028-01-04', vendor: 'X', amount: 10, vat_amount: 0 }), /toekomst/);
 
   const open = await reports.vatReturn(ctx, {});
   assert.equal(open.period, '2026-Q4', 'without a period it picks the oldest one still to file');
