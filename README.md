@@ -22,7 +22,7 @@
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
   <a href="#what-you-can-say">What you can say</a> ·
-  <a href="#the-21-tools">Tools</a> ·
+  <a href="#the-24-tools">Tools</a> ·
   <a href="#the-rules-are-data">Rules</a> ·
   <a href="#hosting">Hosting</a> ·
   <a href="https://boekiehouder.nl">Website (NL)</a>
@@ -48,7 +48,7 @@ you no longer trust your own numbers.
 Bookiz is the opposite bet:
 
 - **Small on purpose.** No bank feeds, no quotes, no stock, no payroll. One
-  small database and 21 tools.
+  small database and 24 tools.
 - **No app to learn.** It is an [MCP](https://modelcontextprotocol.io) server.
   Your assistant is the interface: Claude, ChatGPT, Codex, whatever you use.
 - **No AI inside.** The assistant reads the receipt and supplies facts. A
@@ -60,7 +60,8 @@ Bookiz is the opposite bet:
 
 > **Status: 0.1, early.** The engine is tested but has run no real
 > administration yet. It calculates; it does not file with the Belastingdienst
-> and it is not tax advice. Rules are included for **2026 only**.
+> and it is not tax advice. Rules are complete for **2026**; 2027 is open for
+> booking on provisional rules until the Belastingdienst publishes the rest.
 
 ## What you can say
 
@@ -94,6 +95,8 @@ from Bookiz.
 | **KOR** | Invoices without btw, costs including btw, turnover tracked against the € 20.000 limit. The invoice that would cross it is refused. |
 | **Year report** | Profit, kleinschaligheidsinvesteringsaftrek, zelfstandigenaftrek, startersaftrek, MKB-winstvrijstelling, and what to set aside for income tax and Zvw, also next to a job. |
 | **Receipts** | The original goes to your own mailbox or a folder. The database keeps a SHA-256 hash, not the file. |
+| **Recurring invoices** | A monthly, quarterly or yearly invoice becomes a draft on its date. Nothing is final without you. |
+| **Switching** | Coming from Moneybird, another package or a spreadsheet: take over your customers, unpaid invoices, assets and invoice numbering. Old years stay in your export. |
 | **Export** | A whole year as one JSON file, for your bookkeeper or for leaving. |
 
 ## Quick start
@@ -132,7 +135,7 @@ a time; a second assistant on the same folder is refused with a clear message
 instead of corrupting your books. To use several assistants at once, run the
 [remote server](#remote-server).
 
-## The 21 tools
+## The 24 tools
 
 | Tool | What it does |
 | --- | --- |
@@ -146,6 +149,8 @@ instead of corrupting your books. To use several assistants at once, run the
 | `register_payment` | Mark an invoice paid |
 | `credit_invoice` | Reverse a final invoice |
 | `list_invoices` | By year or status |
+| `save_recurring_invoice` · `list_recurring_invoices` | Invoices that repeat every 1, 3 or 12 months |
+| `import_opening_state` | Switch from another package: numbering, unpaid invoices, assets |
 | `record_expense` | Book a receipt or purchase invoice |
 | `record_mileage` | Business kilometres with your own car |
 | `attach_receipt` | Archive the original document |
@@ -203,12 +208,22 @@ seven years, so that mailbox is now part of your administration.
 
 | | Self-host | Cloud | Done for you |
 | --- | --- | --- | --- |
-| Price | Free | € 99 per year excl. btw | € 399 per year excl. btw for the first 50, then € 499 |
-| What | Everything in this repository | We host, back up and send your mail | Cloud, plus a bookkeeper who files your btw returns and income tax return |
-| Available | Now | **Presale, not live yet** | **Presale, not live yet** |
+| Price | Free | € 99 per year excl. btw, first 30 days free | € 399 per year excl. btw for the first 50, then € 499 |
+| What | Everything in this repository | We host it; your assistant signs in with OAuth | Cloud, plus a bookkeeper who files your btw returns and income tax return |
+| Available | Now | **Opening soon** | **Presale, not live yet** |
 
-Cloud and Done for you are built when people want them. Details on
-[boekiehouder.nl](https://boekiehouder.nl/#prijzen).
+Details on [boekiehouder.nl](https://boekiehouder.nl/#prijzen). Switching per
+1 January is explained step by step on
+[boekiehouder.nl/overstappen](https://boekiehouder.nl/overstappen/).
+
+### How Cloud is built
+
+The hosted version is this same repository: `src/cloud/` plus one Vercel
+function. Supabase provides Postgres, accounts and the OAuth server that
+assistants sign in through. Every customer has a Postgres schema of their own;
+the engine is pointed at one schema and cannot name another. `scripts/cloud-e2e.mjs`
+checks the whole flow against a deployment, including that two customers see
+nothing of each other.
 
 ### Remote server
 
@@ -250,9 +265,12 @@ auto-generated web API cannot read them.
 
 ## Known limits
 
-- **2026 only.** The Belastingdienst had not published 2027 figures on
-  16 November 2026. `rules/nl-2027.json` has to be added before anything can be
-  booked in 2027.
+- **2027 is provisional.** The Belastingdienst had not published 2027 figures
+  on 16 November 2026. Invoices, expenses and btw returns work in 2027 on the
+  rules that carry no year; the kilometre rate, the year report and the tax
+  estimate for 2027 wait for the published figures.
+- **Switching is new** and was built from the rules, not from a real export of
+  another package. Check the outstanding amount after importing.
 - Invoice basis (factuurstelsel) only; no kasstelsel, no margin schemes, no
   goods across borders, no private-use corrections (rubriek 1d).
 - The 80% rule is always used for limited-deductible costs, never the threshold.

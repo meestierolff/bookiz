@@ -1,4 +1,4 @@
-import type { RuleSet } from '../rules.ts';
+import { type RuleSet, yearly } from '../rules.ts';
 import { categoryFor } from './categories.ts';
 import { type IsoDate, monthsInUse, yearOf } from './dates.ts';
 import { type Cents, percentOf, roundCents, toCents } from './money.ts';
@@ -26,13 +26,13 @@ export function deductibleVat(expense: Expense, business: Business, rules: RuleS
  * self-assess, minus btw it gets back. `rules` must be those of the expense year.
  */
 export function businessCost(expense: Expense, business: Business, rules: RuleSet): Cents {
-  if (expense.kind === 'mileage') return roundCents((expense.km ?? 0) * toCents(rules.rules.kilometervergoeding.value));
+  if (expense.kind === 'mileage') return roundCents((expense.km ?? 0) * toCents(yearly(rules, 'kilometervergoeding').value));
   return expense.total_cents + reverseChargeVat(expense, rules) - deductibleVat(expense, business, rules);
 }
 
 /** The part of a cost that lowers taxable profit. */
 export function deductibleCost(expense: Expense, cost: Cents, rules: RuleSet): Cents {
-  return categoryFor(expense.category).limited ? percentOf(cost, rules.rules.beperkt_aftrekbaar_pct.value) : cost;
+  return categoryFor(expense.category).limited ? percentOf(cost, yearly(rules, 'beperkt_aftrekbaar_pct').value) : cost;
 }
 
 export type Depreciation = {

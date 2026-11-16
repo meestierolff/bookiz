@@ -4,7 +4,8 @@
   "contact_email": "hallo@boekiehouder.nl",
   "cloud": {
     "price_year_excl": 99,
-    "stripe_link": ""
+    "stripe_link": "",
+    "open": false
   },
   "dfy": {
     "price_year_excl": 499,

@@ -49,15 +49,17 @@ const ruleSet = z.object({
     btw_correctiegrens: rule(z.number()),
     kor_omzetgrens: rule(z.number()),
     urencriterium: rule(z.number()),
-    zelfstandigenaftrek: rule(z.number()),
-    startersaftrek: rule(z.number()),
-    mkb_winstvrijstelling: rule(z.number()),
-    kia: rule(z.array(kiaBracket).min(2)),
     investering_drempel: rule(z.number()),
     afschrijving_max_pct: rule(z.number()),
-    kilometervergoeding: rule(z.number()),
-    beperkt_aftrekbaar_pct: rule(z.number()),
     bewaarplicht_jaren: rule(z.number()),
+    // Published per year, usually in December. A year can be opened for booking
+    // before these exist; whatever needs them says so instead of guessing.
+    zelfstandigenaftrek: rule(z.number()).optional(),
+    startersaftrek: rule(z.number()).optional(),
+    mkb_winstvrijstelling: rule(z.number()).optional(),
+    kia: rule(z.array(kiaBracket).min(2)).optional(),
+    kilometervergoeding: rule(z.number()).optional(),
+    beperkt_aftrekbaar_pct: rule(z.number()).optional(),
     ib_box1: rule(z.array(taxBracket).min(2)).optional(),
     ib_tariefsaanpassing: rule(z.number()).optional(),
     algemene_heffingskorting: rule(z.array(creditBracket).min(2)).optional(),
@@ -87,6 +89,18 @@ export function availableYears(): number[] {
     .filter((year): year is string => Boolean(year))
     .map(Number)
     .sort();
+}
+
+/** A yearly figure, or a clear refusal when the Belastingdienst has not published it yet. */
+export function yearly<K extends RuleKey>(rules: RuleSet, key: K): NonNullable<RuleSet['rules'][K]> {
+  const found = rules.rules[key];
+  if (!found) {
+    throw new BookizError(
+      `De regel "${key}" voor ${rules.year} is nog niet gepubliceerd door de Belastingdienst.`,
+      'Boeken van facturen en uitgaven kan wel. Dit onderdeel werkt zodra het regelbestand is aangevuld.',
+    );
+  }
+  return found as NonNullable<RuleSet['rules'][K]>;
 }
 
 export function rulesFor(year: number): RuleSet {

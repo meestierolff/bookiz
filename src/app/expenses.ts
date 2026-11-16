@@ -5,7 +5,7 @@ import { assertDate, periodFor, yearOf } from '../core/dates.ts';
 import { formatEur, toCents } from '../core/money.ts';
 import type { Expense, ExpenseVatTreatment } from '../core/types.ts';
 import { archiveReceipt, loadReceiptBytes, type ReceiptSource, uploadLink } from '../receipts.ts';
-import { rulesFor } from '../rules.ts';
+import { rulesFor, yearly } from '../rules.ts';
 import * as store from '../store.ts';
 import { type Ctx, openPeriodFor, todayOf } from './context.ts';
 
@@ -135,7 +135,10 @@ export async function recordExpense(ctx: Ctx, input: ExpenseInput) {
   }
 
   if (!category.vat_deductible && vat !== 0) notes.push('De btw op eten en drinken in de horeca is niet aftrekbaar; het hele bedrag telt als kosten.');
-  if (category.limited) notes.push(`Deze kosten zijn voor ${rules.rules.beperkt_aftrekbaar_pct.value}% aftrekbaar van de winst.`);
+  if (category.limited) {
+    const pct = rules.rules.beperkt_aftrekbaar_pct?.value;
+    notes.push(pct === undefined ? 'Deze kosten zijn beperkt aftrekbaar van de winst.' : `Deze kosten zijn voor ${pct}% aftrekbaar van de winst.`);
+  }
   if (draft.paid_from === 'private') notes.push('Privé betaald: telt als zakelijke kosten en als privéstorting. Je hoeft het bedrag niet terug te boeken.');
   if (treatment !== 'nl' && treatment !== 'none') {
     notes.push('Btw verlegd: Bookiz geeft de btw aan in rubriek 4 en trekt haar, als dat mag, weer af als voorbelasting.');
@@ -179,7 +182,7 @@ export async function recordMileage(ctx: Ctx, input: { date: string; km: number;
   const todayDate = todayOf(ctx);
   if (date > todayDate) throw new BookizError(`De datum ${date} ligt in de toekomst.`);
   const rules = rulesFor(yearOf(date));
-  const rate = rules.rules.kilometervergoeding.value;
+  const rate = yearly(rules, 'kilometervergoeding').value;
   const expense = await ctx.db.transaction(async (tx) => {
     await store.lockBusiness(tx);
     return store.insertExpense(
