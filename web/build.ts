@@ -2,6 +2,7 @@ import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'no
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type RuleKey, type RuleSet, rulesFor } from '../src/rules.ts';
+import { type Company, privacy, terms } from './legal.ts';
 
 /**
  * Builds the static site into web/dist. Prices, payment links and the tax
@@ -15,11 +16,13 @@ const site = JSON.parse(readFileSync(join(here, 'site.json'), 'utf8')) as {
   site_url: string;
   repo_url: string;
   contact_email: string;
+  company: { name: string; kvk: string; vat_id: string; address: string };
   cloud: { price_year_excl: number; stripe_link: string };
   dfy: { price_year_excl: number; founding_price_year_excl: number; founding_seats: number; stripe_link: string };
 };
 
 const YEAR = 2026;
+const company: Company = { ...site.company, email: site.contact_email };
 const rules: RuleSet = rulesFor(YEAR);
 const warnings: string[] = [];
 
@@ -121,7 +124,8 @@ ${(options.jsonLd ?? []).map((data) => `<script type="application/ld+json">${JSO
 ${options.body}
 <footer class="wrap foot">
   <p>Bookiz is software, geen belastingadviseur. De berekeningen volgen de openbare regels in de repository; controleer ze voordat je aangifte doet.</p>
-  <p>Regels voor ${YEAR} voor het laatst met de bron vergeleken op ${dutchDate(rules.checked_on)}. Broncode onder AGPL-3.0, de regels onder MIT.${site.contact_email ? ` Vragen: <a href="mailto:${esc(site.contact_email)}">${esc(site.contact_email)}</a>.` : ''}</p>
+  <p>Regels voor ${YEAR} voor het laatst met de bron vergeleken op ${dutchDate(rules.checked_on)}. Broncode onder AGPL-3.0, de regels onder MIT.</p>
+  <p>${[esc(company.name), esc(company.address), company.kvk && `KvK ${esc(company.kvk)}`, company.vat_id && `Btw-id ${esc(company.vat_id)}`, `<a href="mailto:${esc(company.email)}">${esc(company.email)}</a>`, '<a href="/privacy/">Privacy</a>', '<a href="/voorwaarden/">Voorwaarden</a>'].filter(Boolean).join(' · ')}</p>
 </footer>
 </body>
 </html>
@@ -341,12 +345,50 @@ ${rows}
   });
 }
 
+function legalPage(path: string, title: string, description: string, lead: string, html: string): string {
+  return page({
+    path,
+    title: `${title} | Bookiz`,
+    description,
+    body: `<main class="wrap doc prose">
+  <h1>${title}</h1>
+  <p class="lead">${lead}</p>
+${html}
+  <p class="note">Versie van ${dutchDate(new Date().toISOString().slice(0, 10))}.</p>
+</main>`,
+  });
+}
+
+const extraPages: Record<string, string> = {
+  privacy: legalPage(
+    '/privacy/',
+    'Privacyverklaring',
+    'Welke gegevens Bookiz vastlegt, waarom, waar ze staan en welke rechten je hebt.',
+    'Kort: de website volgt je niet, je bonnen bewaren wij niet, en je administratie staat in de Europese Unie.',
+    privacy(company),
+  ),
+  voorwaarden: legalPage(
+    '/voorwaarden/',
+    'Algemene voorwaarden',
+    'De afspraken voor het gebruik van Bookiz Cloud: wat je mag verwachten, wat het kost en hoe je opzegt.',
+    'Kort: Bookiz rekent en bewaart, jij blijft verantwoordelijk voor je administratie en je aangiftes, en je kunt altijd met al je gegevens weg.',
+    terms(company, site.cloud.price_year_excl),
+  ),
+};
+if (!company.kvk || !company.address) {
+  warnings.push('company.kvk and company.address are empty in web/site.json: the legal pages and footer show only the name and e-mail address');
+}
+
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(join(dist, 'fonts'), { recursive: true });
 mkdirSync(join(dist, `belastingregels-${YEAR}`), { recursive: true });
 
 writeFileSync(join(dist, 'index.html'), home());
 writeFileSync(join(dist, `belastingregels-${YEAR}`, 'index.html'), rulesPage());
+for (const [slug, html] of Object.entries(extraPages)) {
+  mkdirSync(join(dist, slug), { recursive: true });
+  writeFileSync(join(dist, slug, 'index.html'), html);
+}
 for (const file of ['site.css', 'logo.png', 'favicon.png']) copyFileSync(join(here, 'assets', file), join(dist, file));
 copyFileSync(
   join(root, 'node_modules/@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2'),
@@ -359,7 +401,7 @@ copyFileSync(
 writeFileSync(join(dist, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${site.site_url}/sitemap.xml\n`);
 writeFileSync(
   join(dist, 'sitemap.xml'),
-  `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${['/', `/belastingregels-${YEAR}/`]
+  `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${['/', `/belastingregels-${YEAR}/`, ...Object.keys(extraPages).map((slug) => `/${slug}/`)]
     .map((path) => `  <url><loc>${site.site_url}${path}</loc></url>`)
     .join('\n')}\n</urlset>\n`,
 );
@@ -368,5 +410,5 @@ writeFileSync(
   `# Bookiz\n\n> Open-source boekhouding voor Nederlandse eenmanszaken met weinig facturen. Geen eigen chatbot: de gebruiker bedient Bookiz via een eigen AI-assistent over MCP. Bookiz dient geen aangiftes in bij de Belastingdienst.\n\n- [Wat Bookiz doet en kost](${site.site_url}/)\n- [Belastingregels ${YEAR} voor eenmanszaken, met bron](${site.site_url}/belastingregels-${YEAR}/)\n${site.repo_url ? `- [Broncode](${site.repo_url})\n` : ''}`,
 );
 
-console.log(`web/dist built: 2 pages, ${Object.keys(rules.rules).length} rules for ${YEAR}`);
+console.log(`web/dist built: ${2 + Object.keys(extraPages).length} pages, ${Object.keys(rules.rules).length} rules for ${YEAR}`);
 for (const warning of warnings) console.warn(`  note: ${warning}`);
