@@ -44,6 +44,7 @@ export async function makeCtx(overrides: Partial<Config> = {}): Promise<TestCtx>
     port: 0,
     publicUrl: undefined,
     token: undefined,
+    urlToken: undefined,
     smtpUrl: undefined,
     mailFrom: undefined,
     receiptArchive: 'folder',

@@ -11,6 +11,8 @@ export type Config = {
   port: number;
   publicUrl: string | undefined;
   token: string | undefined;
+  /** Separate, optional secret for clients that can only be given a URL. */
+  urlToken: string | undefined;
   smtpUrl: string | undefined;
   mailFrom: string | undefined;
   receiptArchive: 'email' | 'folder';
@@ -33,6 +35,13 @@ export function loadConfig(mode: Mode, env: NodeJS.ProcessEnv = process.env): Co
       'Maak er een met: openssl rand -hex 24',
     );
   }
+  const urlToken = env.BOOKIZ_URL_TOKEN || undefined;
+  if (urlToken && (urlToken.length < 24 || urlToken === token)) {
+    throw new BookizError(
+      'BOOKIZ_URL_TOKEN moet minstens 24 tekens zijn en mag niet gelijk zijn aan BOOKIZ_TOKEN.',
+      'Een adres met een geheim erin lekt makkelijker; daarom krijgt het een eigen geheim dat je los kunt vervangen.',
+    );
+  }
   return {
     mode,
     dataDir,
@@ -40,6 +49,7 @@ export function loadConfig(mode: Mode, env: NodeJS.ProcessEnv = process.env): Co
     port: Number(env.PORT ?? 8787),
     publicUrl: env.PUBLIC_URL?.replace(/\/+$/, '') || undefined,
     token,
+    urlToken,
     smtpUrl,
     mailFrom: env.MAIL_FROM || undefined,
     receiptArchive: (requested as 'email' | 'folder' | undefined) ?? (smtpUrl ? 'email' : 'folder'),

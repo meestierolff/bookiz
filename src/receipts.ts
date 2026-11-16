@@ -182,9 +182,14 @@ function slug(value: string): string {
   return cleaned.slice(0, 40) || 'bon';
 }
 
-/** Unguessable but stateless links: the signature ties a public URL to one document. */
+/**
+ * Unguessable but stateless links: the signature ties a public URL to one
+ * document. The signing key is derived from the server token and is never sent
+ * anywhere, so neither a leaked link nor a leaked URL secret can forge another.
+ */
 export function sign(config: Config, subject: string): string {
-  return createHmac('sha256', config.token ?? '').update(subject).digest('hex').slice(0, 32);
+  const key = createHmac('sha256', config.token ?? '').update('link-signing-v1').digest();
+  return createHmac('sha256', key).update(subject).digest('hex').slice(0, 32);
 }
 
 export function verifySignature(config: Config, subject: string, signature: string): boolean {
