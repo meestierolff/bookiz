@@ -10,10 +10,15 @@ let jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
 let jwksFor = '';
 
 /**
- * Verify a Supabase access token against the project's public keys. Used for
- * both the dashboard session and tokens an AI assistant obtained through OAuth.
+ * Verify a Supabase access token against the project's public keys.
+ *
+ * Two kinds of token exist and they are not interchangeable: a `session` token
+ * comes from signing in on our own pages, an `assistant` token was issued to an
+ * OAuth client the owner approved and carries that client's id. Supabase puts
+ * the same audience on every token, so the binding to this server rests on the
+ * issuer: this Supabase project must serve Bookiz and nothing else.
  */
-export async function verifyAccessToken(env: CloudEnv, token: string): Promise<User | null> {
+export async function verifyAccessToken(env: CloudEnv, token: string, kind: 'session' | 'assistant'): Promise<User | null> {
   if (!jwks || jwksFor !== env.supabaseUrl) {
     jwks = createRemoteJWKSet(new URL(`${env.supabaseUrl}/auth/v1/.well-known/jwks.json`));
     jwksFor = env.supabaseUrl;
@@ -26,6 +31,8 @@ export async function verifyAccessToken(env: CloudEnv, token: string): Promise<U
     });
     if (typeof payload.sub !== 'string' || payload.role !== 'authenticated') return null;
     if (payload.is_anonymous === true) return null;
+    const issuedToClient = typeof payload.client_id === 'string' && payload.client_id.length > 0;
+    if (issuedToClient !== (kind === 'assistant')) return null;
     return { id: payload.sub, email: typeof payload.email === 'string' ? payload.email : '' };
   } catch {
     return null;
@@ -121,13 +128,22 @@ export async function currentSession(env: CloudEnv, req: IncomingMessage, res: S
   const access = cookies[ACCESS_COOKIE];
   const refresh = cookies[REFRESH_COOKIE];
   if (access) {
-    const user = await verifyAccessToken(env, access);
+    const user = await verifyAccessToken(env, access, 'session');
     if (user && refresh) return { access_token: access, refresh_token: refresh, user };
   }
   if (!refresh) return null;
   const renewed = await refreshSession(env, refresh);
   if (renewed) res.setHeader('set-cookie', sessionCookies(renewed));
   return renewed;
+}
+
+/** End this browser's session at Supabase too, so a copied cookie stops working. Assistants stay connected. */
+export async function revokeSession(env: CloudEnv, accessToken: string): Promise<void> {
+  await fetch(`${env.supabaseUrl}/auth/v1/logout?scope=local`, {
+    method: 'POST',
+    headers: { apikey: env.supabasePublishableKey, authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(10_000),
+  }).catch(() => undefined);
 }
 
 export function bearerToken(req: IncomingMessage): string | undefined {
