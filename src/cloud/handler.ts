@@ -106,6 +106,20 @@ async function allowAttempt(cloud: Cloud, kind: AttemptKind, email: string, ip: 
   }
 }
 
+/** A correct code gives its claimed attempt back, so signing in normally never counts against the owner. */
+async function forgetAttempt(cloud: Cloud, email: string, ip: string): Promise<void> {
+  const db = await cloud.connect();
+  try {
+    await db.query(
+      `delete from bookiz_cloud.login_attempt where id = (
+         select id from bookiz_cloud.login_attempt where kind = 'code_wrong' and email = $1 and ip = $2 order by id desc limit 1)`,
+      [email, ip],
+    );
+  } finally {
+    await db.close();
+  }
+}
+
 /** Follow a redirect that Supabase hands back only if it is a real link, never script or data. */
 function safeExternal(target: unknown): string | null {
   if (typeof target !== 'string') return null;
@@ -273,15 +287,16 @@ async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url:
     const email = (fields.get('email') ?? '').trim().toLowerCase();
     const next = safeNext(fields.get('next'));
     const ip = clientIp(req);
-    if (!(await allowAttempt(cloud, 'code_wrong', email, ip, false))) {
+    // Claim the attempt before checking the code, in one locked step, so parallel guesses cannot all slip under the limit.
+    if (!(await allowAttempt(cloud, 'code_wrong', email, ip, true))) {
       return sendHtml(res, 429, (nonce) => loginPage(nonce, { next, error: 'Te veel onjuiste codes. Vraag over een kwartier een nieuwe code aan.' }));
     }
     try {
       const session = await verifyLoginCode(cloud.env, email, (fields.get('code') ?? '').replace(/\s/g, ''));
+      await forgetAttempt(cloud, email, ip);
       return redirect(res, next, sessionCookies(session));
     } catch (error) {
       if (!(error instanceof BookizError)) throw error;
-      await allowAttempt(cloud, 'code_wrong', email, ip, true);
       return sendHtml(res, 400, (nonce) => codePage(nonce, { email, next, error: error.message }));
     }
   }

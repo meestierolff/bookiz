@@ -50,7 +50,8 @@ Bookiz is the opposite bet:
 - **Small on purpose.** No bank feeds, no quotes, no stock, no payroll. One
   small database and 24 tools.
 - **No app to learn.** It is an [MCP](https://modelcontextprotocol.io) server.
-  Your assistant is the interface: Claude, ChatGPT, Codex, whatever you use.
+  Your assistant is the interface: Claude, Codex, or any other that lets you
+  add your own MCP server.
 - **No AI inside.** The assistant reads the receipt and supplies facts. A
   deterministic engine applies the rules. Same input, same books.
 - **Rules you can check.** Every figure is in [`rules/nl-2026.json`](rules/nl-2026.json)

@@ -146,7 +146,7 @@ ${subscribe}
 <div class="card accent"><span class="address">${esc(options.mcpUrl)}</span></div>
 <ul class="todo">
   <li><strong>Claude:</strong> Instellingen, Connectors, eigen connector toevoegen.</li>
-  <li><strong>ChatGPT:</strong> Instellingen, Apps en connectors; eigen MCP-server toevoegen via de ontwikkelaarsmodus.</li>
+  <li><strong>ChatGPT:</strong> eigen MCP-servers met schrijfrechten staan nu alleen open voor Business, Enterprise en Edu, op het web. Met Pro kan ChatGPT alleen meelezen.</li>
   <li><strong>Grok:</strong> grok.com/connectors, nieuwe connector, Custom.</li>
   <li><strong>Claude Code:</strong> <code>claude mcp add --transport http bookiz ${esc(options.mcpUrl)}</code></li>
 </ul>

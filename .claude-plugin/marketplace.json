@@ -1,0 +1,11 @@
+{
+  "name": "bookiz",
+  "owner": { "name": "Bookiz" },
+  "plugins": [
+    {
+      "name": "bookiz",
+      "source": "./plugin",
+      "description": "Boekhouding voor zzp'ers met weinig facturen: facturen, bonnen en btw-aangifte vanuit je assistent."
+    }
+  ]
+}

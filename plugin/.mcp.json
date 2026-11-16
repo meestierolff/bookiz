@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "bookiz": { "type": "http", "url": "https://boekiehouder.nl/mcp" }
+  }
+}
