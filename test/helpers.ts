@@ -55,6 +55,9 @@ export async function makeCtx(overrides: Partial<Config> = {}): Promise<TestCtx>
     maxReceiptBytes: 10 * 1024 * 1024,
     fallbackArchiveEmail: undefined,
     dailyMailLimit: undefined,
+    mailOnlyTo: undefined,
+    receiptsOnlyTo: undefined,
+    dailyReceiptLimit: undefined,
     ...overrides,
   };
   const db = await openTestDb();

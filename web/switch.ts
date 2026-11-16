@@ -24,7 +24,7 @@ export const switchFaq = (facts: SwitchFacts): [string, string][] => [
   ],
   [
     'Kan ik overstappen vanuit Moneybird?',
-    'Ja. Moneybird heeft een eigen koppeling voor AI-assistenten. Koppel je assistent aan Moneybird en aan Bookiz, en vraag hem je klanten, je openstaande facturen en je bedrijfsmiddelen over te zetten. Zonder die koppeling lees je de gegevens voor uit je export. Controleer daarna of het openstaande bedrag in Bookiz gelijk is aan dat in Moneybird.',
+    'Ja. Moneybird heeft een eigen koppeling voor AI-assistenten. Koppel je assistent aan Moneybird en aan Bookiz, en vraag hem je klanten en je openstaande facturen over te zetten; je bedrijfsmiddelen geef je zelf op. Zonder die koppeling lees je de gegevens voor uit je export. Controleer daarna of het openstaande bedrag in Bookiz gelijk is aan dat in Moneybird.',
   ],
   [
     'Wat kost overstappen naar Bookiz?',
@@ -68,7 +68,7 @@ export function switchBody(facts: SwitchFacts): string {
   </table>
 
   <h2>Overstappen vanuit Moneybird</h2>
-  <p>Moneybird heeft een eigen koppeling voor AI-assistenten. Dat maakt overstappen eenvoudig: je koppelt je assistent aan beide, en hij leest in Moneybird wat hij in Bookiz vastlegt. Je hoeft niets over te typen.</p>
+  <p>Moneybird heeft een eigen koppeling voor AI-assistenten. Koppel je assistent aan beide, dan kan hij je klanten en je onbetaalde facturen in Moneybird opzoeken en in Bookiz vastleggen. Je bedrijfsmiddelen en hun boekwaarde geef je zelf op; die staan in je laatste jaaroverzicht.</p>
   <p>De overstapfunctie van Bookiz is nieuw. Vergelijk daarom na afloop het openstaande bedrag en de boekwaarde van je bedrijfsmiddelen met de cijfers in Moneybird, en meld het als er iets niet klopt.</p>
 
   <h2>Midden in het jaar overstappen</h2>

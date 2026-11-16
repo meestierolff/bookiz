@@ -141,7 +141,7 @@ export async function archiveReceipt(
   const base = { sha256, filename, bytes: bytes.length, archived_at: new Date().toISOString() };
 
   if (deps.config.receiptArchive === 'email') {
-    const to = business.archive_email ?? business.email ?? deps.config.fallbackArchiveEmail;
+    const to = deps.config.receiptsOnlyTo ?? business.archive_email ?? business.email ?? deps.config.fallbackArchiveEmail;
     if (!to) {
       throw new BookizError(
         'Er is geen e-mailadres om bonnen naar te sturen.',
@@ -190,12 +190,14 @@ function slug(value: string): string {
  * document. The signing key is derived from the server token and is never sent
  * anywhere, so neither a leaked link nor a leaked URL secret can forge another.
  */
-export function sign(config: Config, subject: string): string {
+type LinkConfig = Pick<Config, 'token' | 'linkScope'>;
+
+export function sign(config: Pick<Config, 'token'>, subject: string): string {
   const key = createHmac('sha256', config.token ?? '').update('link-signing-v1').digest();
   return createHmac('sha256', key).update(subject).digest('hex').slice(0, 32);
 }
 
-export function verifySignature(config: Config, subject: string, signature: string): boolean {
+export function verifySignature(config: Pick<Config, 'token'>, subject: string, signature: string): boolean {
   const expected = Buffer.from(sign(config, subject));
   const given = Buffer.from(signature);
   return Boolean(config.token) && expected.length === given.length && timingSafeEqual(expected, given);
@@ -204,11 +206,11 @@ export function verifySignature(config: Config, subject: string, signature: stri
 type LinkKind = 'bon' | 'factuur';
 
 /** The signed subject carries the scope, so a link for one administration is worthless in another. */
-function linkSubject(config: Config, kind: LinkKind, id: string): string {
+function linkSubject(config: LinkConfig, kind: LinkKind, id: string): string {
   return `${config.linkScope}:${kind}:${id}`;
 }
 
-export function verifyLink(config: Config, kind: LinkKind, id: string, signature: string): boolean {
+export function verifyLink(config: LinkConfig, kind: LinkKind, id: string, signature: string): boolean {
   return verifySignature(config, linkSubject(config, kind, id), signature);
 }
 

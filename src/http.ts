@@ -39,7 +39,8 @@ export function send(
     'cache-control': 'no-store',
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
-    'referrer-policy': 'no-referrer',
+    // Not `no-referrer`: that makes browsers send `Origin: null` on our own forms, which the origin check rightly refuses.
+    'referrer-policy': 'same-origin',
     ...headers,
   });
   res.end(body);
@@ -134,6 +135,7 @@ export async function handleReceipt(ctx: Ctx, req: IncomingMessage, res: ServerR
     return sendHtml(res, 200, (nonce) => uploadPage(title, detail, done, ctx.config.maxReceiptBytes, nonce));
   }
   if (req.method !== 'PUT') return send(res, 405, 'Niet toegestaan.');
+  if (ctx.locked) return send(res, 403, ctx.locked);
   if (expense.receipt) return send(res, 409, 'Bij deze uitgave is al een bewijsstuk bewaard.');
   const bytes = await readBody(req, ctx.config.maxReceiptBytes, tooLarge(ctx.config));
   await storeReceipt(ctx, expense, bytes, await store.requireBusiness(ctx.db));
@@ -162,6 +164,15 @@ export async function handleMcp(ctx: Ctx, req: IncomingMessage, res: ServerRespo
     return;
   }
   const body = JSON.parse((await readBody(req, 16 * 1024 * 1024)).toString('utf8'));
+  if (Array.isArray(body)) {
+    // A batch would run its calls side by side on one database connection, where locks and limits no longer hold.
+    return send(
+      res,
+      400,
+      JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Batches are not supported; send one message per request.' } }),
+      'application/json',
+    );
+  }
   const server = createServer(ctx);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   const finished = new Promise<void>((resolve) => res.on('close', resolve));

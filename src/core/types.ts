@@ -18,6 +18,8 @@ export type Business = {
   kor_until: IsoDate | null;
   vat_period: VatPeriodKind;
   payment_term_days: number;
+  /** Set when the owner switched from another package: earlier dates belong to the old one. */
+  books_start: IsoDate | null;
 };
 
 /** Facts about a year that no document can tell us; the owner states them. */

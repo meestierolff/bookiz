@@ -8,6 +8,7 @@ import { archiveReceipt, loadReceiptBytes, type ReceiptSource, uploadLink } from
 import { rulesFor, yearly } from '../rules.ts';
 import * as store from '../store.ts';
 import { type Ctx, openPeriodFor, todayOf } from './context.ts';
+import { assertInBooks } from './invoices.ts';
 
 export type ExpenseInput = {
   date: string;
@@ -61,6 +62,7 @@ export async function recordExpense(ctx: Ctx, input: ExpenseInput) {
   const todayDate = todayOf(ctx);
   const date = assertDate(input.date);
   if (date > todayDate) throw new BookizError(`De datum ${date} ligt in de toekomst.`);
+  assertInBooks(business, date);
   const year = yearOf(date);
   const rules = rulesFor(year);
   const category = categoryFor(input.category ?? 'overig');
@@ -181,6 +183,7 @@ export async function recordMileage(ctx: Ctx, input: { date: string; km: number;
   const date = assertDate(input.date);
   const todayDate = todayOf(ctx);
   if (date > todayDate) throw new BookizError(`De datum ${date} ligt in de toekomst.`);
+  assertInBooks(business, date);
   const rules = rulesFor(yearOf(date));
   const rate = yearly(rules, 'kilometervergoeding').value;
   const expense = await ctx.db.transaction(async (tx) => {
@@ -230,14 +233,28 @@ export async function storeReceipt(
   bytes: Buffer,
   business: Awaited<ReturnType<typeof store.requireBusiness>>,
 ) {
-  const receipt = await archiveReceipt(bytes, expense, business, ctx);
-  await store.setReceipt(ctx.db, expense.ref, receipt);
+  if (ctx.locked) throw new BookizError(ctx.locked);
+  // Behind the business lock: two uploads for the same expense cannot both be archived,
+  // and the daily allowance cannot be overdrawn.
+  const receipt = await ctx.db.transaction(async (tx) => {
+    await store.lockBusiness(tx);
+    const current = await store.getExpense(tx, expense.ref);
+    if (current.receipt) throw new BookizError(`Bij ${expense.ref} is al een bewijsstuk bewaard (${current.receipt.filename}).`);
+    const limit = ctx.config.dailyReceiptLimit;
+    if (limit !== undefined && !(await store.claimDaily(tx, 'receipt_quota', limit, { ref: expense.ref }))) {
+      throw new BookizError(`Je hebt in de afgelopen 24 uur al ${limit} bonnen bewaard; meer kan pas later.`);
+    }
+    const stored = await archiveReceipt(bytes, expense, business, ctx);
+    await store.setReceipt(tx, expense.ref, stored);
+    return stored;
+  });
+  const to = ctx.config.receiptsOnlyTo ?? business.archive_email ?? business.email ?? ctx.config.fallbackArchiveEmail;
   return {
     ref: expense.ref,
     receipt,
     note:
       receipt.archive === 'email'
-        ? `Het bewijsstuk is gemaild naar ${business.archive_email ?? business.email}. Die e-mail is het archief; Bookiz bewaart alleen het controlegetal.`
+        ? `Het bewijsstuk is gemaild naar ${to}. Die e-mail is het archief; Bookiz bewaart alleen het controlegetal.`
         : `Het bewijsstuk staat in de datamap onder ${receipt.location}.`,
   };
 }

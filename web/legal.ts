@@ -52,7 +52,7 @@ export function privacy(company: Company): string {
     {
       title: '3. Welke gegevens leggen we vast?',
       body: [
-        p('<strong>Als je de website bezoekt.</strong> De website plaatst geen cookies en bevat geen scripts of meetpixels. Onze hostingpartij verwerkt technische verbindingsgegevens, zoals je IP-adres, om de pagina te kunnen tonen en misbruik te weren.'),
+        p('<strong>Als je de website bezoekt.</strong> De openbare pagina’s plaatsen geen cookies en bevatten geen scripts of meetpixels. Log je in op Bookiz Cloud, dan plaatsen we twee functionele cookies om je ingelogd te houden; verder niets. Onze hostingpartij verwerkt technische verbindingsgegevens, zoals je IP-adres, om de pagina te kunnen tonen en misbruik te weren.'),
         p('<strong>Als je contact opneemt.</strong> Je e-mailadres, je naam en wat je ons schrijft, om je te kunnen antwoorden.'),
         p('<strong>Als je betaalt.</strong> Je naam, e-mailadres, factuuradres en eventueel btw-nummer, via onze betaalprovider. Kaart- of bankgegevens zien wij niet.'),
         p('<strong>Als je Bookiz Cloud gebruikt.</strong> Je e-mailadres om in te loggen, je bedrijfsgegevens (naam, adres, KvK-nummer, btw-nummer, IBAN) en de administratie die je via je assistent invoert: facturen, uitgaven, relaties en aangiftes. Daarnaast een logboek van wijzigingen, zodat je kunt nagaan wat wanneer is geboekt.'),
@@ -173,8 +173,8 @@ export function terms(company: Company, cloudPriceExcl: number): string {
     {
       title: '5. Opzeggen en je gegevens',
       body: [
-        p(`Je kunt op elk moment opzeggen via je account of met een e-mail naar ${mail}. Je houdt toegang tot het einde van de betaalde periode.`),
-        p('Je kunt altijd je hele administratie exporteren, ook na opzegging tot het einde van je periode. Doe dat voordat je vertrekt: jij moet je administratie zeven jaar kunnen tonen. Na het einde van de overeenkomst verwijderen we je gegevens uit onze actieve systemen; in back-ups kunnen ze nog korte tijd voorkomen.'),
+        p(`Je kunt op elk moment opzeggen met een e-mail naar ${mail} vanaf het adres van je account. Je houdt toegang tot het einde van de betaalde periode.`),
+        p('Je kunt altijd je hele administratie exporteren, ook na opzegging tot het einde van je periode. Doe dat voordat je vertrekt: jij moet je administratie zeven jaar kunnen tonen. Na het einde van de overeenkomst verwijderen we je gegevens op jouw verzoek, en anders uiterlijk een jaar later, uit onze actieve systemen; in back-ups kunnen ze nog korte tijd voorkomen.'),
         p('Wij kunnen de overeenkomst opzeggen met een termijn van twee maanden, of direct bij misbruik of bij een ernstige schending van deze voorwaarden.'),
       ],
     },

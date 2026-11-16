@@ -89,9 +89,22 @@ export async function openConnection(databaseUrl: string, searchPath?: string): 
   if (searchPath !== undefined && !/^[a-z_][a-z0-9_]*$/.test(searchPath)) throw new Error('invalid schema name');
   const client = new pg.Client({
     connectionString: databaseUrl,
+    connectionTimeoutMillis: 10_000,
+    statement_timeout: 30_000,
     ...(searchPath ? { options: `-c search_path=${searchPath}` } : {}),
   });
+  // A connection dropped by the server must fail the request it belongs to, not the whole process.
+  client.on('error', (error) => console.error('[bookiz] database connection lost', error.message));
   await client.connect();
+  if (searchPath) {
+    // Isolation between customers rests on this setting. If a pooler ever ignores
+    // it, every query would land in a shared schema: refuse rather than find out.
+    const rows = (await client.query('select current_schema() as schema')).rows as { schema: string | null }[];
+    if (rows[0]?.schema !== searchPath) {
+      await client.end().catch(() => undefined);
+      throw new Error(`database did not select schema ${searchPath}`);
+    }
+  }
   const queryable: Queryable = {
     query: async <T>(sql: string, params: unknown[] = []) => (await client.query(sql, params)).rows as T[],
     exec: async (sql) => {

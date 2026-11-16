@@ -133,7 +133,9 @@ export async function currentSession(env: CloudEnv, req: IncomingMessage, res: S
   }
   if (!refresh) return null;
   const renewed = await refreshSession(env, refresh);
-  if (renewed) res.setHeader('set-cookie', sessionCookies(renewed));
+  // A refreshed token gets the same scrutiny as any other: it must be a browser session, not an assistant's.
+  if (!renewed || !(await verifyAccessToken(env, renewed.access_token, 'session'))) return null;
+  res.setHeader('set-cookie', sessionCookies(renewed));
   return renewed;
 }
 

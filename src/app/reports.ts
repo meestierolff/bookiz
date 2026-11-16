@@ -59,7 +59,10 @@ function returnFor(period: string, books: Books): VatReturn {
  */
 function duePeriods(books: Books, todayDate: string): string[] {
   const { business, invoices, expenses, filings } = books;
-  const dates = [...invoices.filter((i) => i.status === 'final').map((i) => i.issue_date), ...expenses.map((e) => e.date)];
+  // What was taken over from another package was declared there; only our own documents open a period.
+  const dates = business.books_start
+    ? [business.books_start]
+    : [...invoices.filter((i) => i.status === 'final' && !i.imported).map((i) => i.issue_date), ...expenses.filter((e) => !e.imported).map((e) => e.date)];
   if (dates.length === 0) return [];
   const filed = new Set(filings.map((filing) => filing.period));
   const years = availableYears();
@@ -79,9 +82,22 @@ export async function vatReturn(ctx: Ctx, input: { period?: string | undefined }
   const books = await loadBooks(ctx.db);
   const todayDate = todayOf(ctx);
   const period = input.period ?? duePeriods(books, todayDate)[0] ?? periodFor(todayDate, books.business.vat_period);
-  const { to } = checkPeriod(period, books.business);
+  const { from, to } = checkPeriod(period, books.business);
+  const start = books.business.books_start;
+  if (start && to < start) {
+    throw new BookizError(
+      `Het tijdvak ${period} ligt vóór ${start}, de dag waarop je naar Bookiz bent overgestapt.`,
+      'Die aangifte doe je op basis van je oude pakket.',
+    );
+  }
   const filing = books.filings.find((candidate) => candidate.period === period);
   const result = returnFor(period, books);
+  if (start && start > from && !filing) {
+    result.warnings.push(
+      `Je bent op ${start} overgestapt, midden in dit tijdvak. Deze cijfers dekken alleen de periode vanaf die dag: ` +
+        'tel de cijfers van je oude pakket over het eerste deel van het tijdvak erbij voordat je aangifte doet.',
+    );
+  }
   const deadline = vatDeadline(period);
   const how = filing
     ? 'Deze aangifte is gedaan; dit zijn de vastgelegde cijfers.'

@@ -8,7 +8,7 @@ import { yearOf } from '../core/dates.ts';
 import { BookizError } from '../errors.ts';
 import { fail, handleDocumentLink, handleMcp, readBody, send, sendHtml } from '../http.ts';
 import { createMailer, type Mailer } from '../mail.ts';
-import { uploadLink } from '../receipts.ts';
+import { uploadLink, verifyLink } from '../receipts.ts';
 import { availableYears } from '../rules.ts';
 import { VERSION } from '../server.ts';
 import * as store from '../store.ts';
@@ -24,7 +24,7 @@ import {
   verifyLoginCode,
 } from './auth.ts';
 import { type CloudEnv, loadCloudEnv } from './env.ts';
-import { codePage, consentPage, dashboardPage, loginMail, loginPage, messagePage } from './pages.ts';
+import { codePage, consentPage, dashboardPage, forwardPage, loginMail, loginPage, messagePage } from './pages.ts';
 import {
   type Account,
   accessOf,
@@ -120,6 +120,24 @@ async function forgetAttempt(cloud: Cloud, email: string, ip: string): Promise<v
   }
 }
 
+const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
+
+/**
+ * Where an approval sends the browser back to. Assistants register themselves,
+ * so the name they give proves nothing; the return address is what tells the
+ * owner who really receives access.
+ */
+function describeReturn(redirect: string): { host: string; known: boolean; local: boolean } {
+  try {
+    const url = new URL(redirect);
+    const local = url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
+    const known = url.protocol === 'https:' && ['claude.ai', 'claude.com', 'chatgpt.com', 'www.cursor.com', 'vscode.dev', 'console.x.ai'].includes(url.hostname);
+    return { host: url.host || url.protocol, known, local };
+  } catch {
+    return { host: 'onbekend adres', known: false, local: false };
+  }
+}
+
 /** Follow a redirect that Supabase hands back only if it is a real link, never script or data. */
 function safeExternal(target: unknown): string | null {
   if (typeof target !== 'string') return null;
@@ -203,8 +221,13 @@ async function dashboard(cloud: Cloud, req: IncomingMessage, res: ServerResponse
     },
     cloud.now,
   );
+  const grants = await (await supabaseFor(cloud, session)).auth.oauth
+    .listGrants()
+    .then(({ data }) => (data ?? []).map((grant) => ({ clientId: grant.client.id, name: grant.client.name ?? 'Onbekende toepassing', since: grant.granted_at })))
+    .catch(() => []);
   sendHtml(res, 200, (nonce) =>
     dashboardPage(nonce, {
+      grants,
       account,
       access: access.allowed,
       mcpUrl: `${cloud.env.publicUrl}/mcp`,
@@ -230,18 +253,12 @@ async function consent(cloud: Cloud, req: IncomingMessage, res: ServerResponse, 
     const details = data as unknown as Record<string, any>;
     const already = !details.authorization_id ? safeExternal(details.redirect_url) : null;
     if (already) return redirect(res, already);
-    let host = 'onbekend adres';
-    try {
-      host = new URL(String(details.redirect_uri ?? details.redirect_url ?? '')).host;
-    } catch {
-      // Keep the warning text; the owner decides.
-    }
+    const back = describeReturn(String(details.redirect_uri ?? details.redirect_url ?? ''));
     return sendHtml(res, 200, (nonce) =>
       consentPage(nonce, {
         authorizationId: id,
         clientName: String(details.client?.name ?? details.client?.client_name ?? 'Een onbekende toepassing'),
-        clientUri: details.client?.uri ?? null,
-        redirectHost: host,
+        returnTo: back,
         email: session.user.email,
       }),
     );
@@ -257,7 +274,9 @@ async function consent(cloud: Cloud, req: IncomingMessage, res: ServerResponse, 
   if (error || !target) {
     return sendHtml(res, 400, (n) => messagePage(n, 'Dat lukte niet', 'De koppeling kon niet worden afgerond. Start het koppelen opnieuw vanuit je assistent.'));
   }
-  return redirect(res, target);
+  // Browsers refuse a redirect to another site straight from a form post under our
+  // content policy, so hand the owner a page that takes them there.
+  return sendHtml(res, 200, (nonce) => forwardPage(nonce, target, describeReturn(target).host));
 }
 
 async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url: URL, parts: string[]): Promise<void> {
@@ -271,8 +290,12 @@ async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url:
     const fields = await form(req);
     const email = (fields.get('email') ?? '').trim().toLowerCase();
     const next = safeNext(fields.get('next'));
-    if (!/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(email)) {
+    if (!EMAIL.test(email)) {
       return sendHtml(res, 400, (nonce) => loginPage(nonce, { next, error: 'Dat is geen geldig e-mailadres.' }));
+    }
+    if (!cloud.env.smtpUrl || !cloud.env.mailFrom) {
+      // Checked before anything is created: without mail no code can arrive, so no account should exist either.
+      return sendHtml(res, 503, (nonce) => loginPage(nonce, { next, error: 'Inloggen is nog niet open. Probeer het binnenkort opnieuw.' }));
     }
     if (!(await allowAttempt(cloud, 'code_sent', email, clientIp(req), true))) {
       return sendHtml(res, 429, (nonce) => loginPage(nonce, { next, error: 'Te veel pogingen. Probeer het over een kwartier opnieuw.' }));
@@ -286,6 +309,7 @@ async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url:
     const fields = await form(req);
     const email = (fields.get('email') ?? '').trim().toLowerCase();
     const next = safeNext(fields.get('next'));
+    if (!EMAIL.test(email)) return sendHtml(res, 400, (nonce) => loginPage(nonce, { next, error: 'Dat is geen geldig e-mailadres.' }));
     const ip = clientIp(req);
     // Claim the attempt before checking the code, in one locked step, so parallel guesses cannot all slip under the limit.
     if (!(await allowAttempt(cloud, 'code_wrong', email, ip, true))) {
@@ -319,6 +343,11 @@ async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url:
       'content-disposition': `attachment; filename="bookiz-${year}.json"`,
     });
   }
+  if (page === 'revoke' && req.method === 'POST') {
+    const clientId = (await form(req)).get('client_id') ?? '';
+    if (/^[\w-]{1,200}$/.test(clientId)) await (await supabaseFor(cloud, session)).auth.oauth.revokeGrant({ clientId });
+    return redirect(res, '/app');
+  }
   if (page === '' && req.method === 'GET') return dashboard(cloud, req, res, session);
   return send(res, 404, 'Niet gevonden.');
 }
@@ -351,7 +380,10 @@ async function stripeWebhook(cloud: Cloud, req: IncomingMessage, res: ServerResp
         event.type,
       ]);
       if (fresh.length === 0) return;
-      if (event.type === 'checkout.session.completed' && object.payment_status === 'paid' && typeof object.client_reference_id === 'string') {
+      // Other products are sold from the same Stripe account; only the Bookiz Cloud link buys Bookiz Cloud.
+      const ours =
+        Boolean(cloud.env.stripePaymentLinkId) && object.payment_link === cloud.env.stripePaymentLinkId && object.mode === 'subscription';
+      if (event.type === 'checkout.session.completed' && ours && object.payment_status === 'paid' && typeof object.client_reference_id === 'string') {
         await tx.query(
           `update bookiz_cloud.account set status = 'active', stripe_customer_id = $2,
              paid_until = greatest(coalesce(paid_until, now()), now()) + interval '1 year 7 days'
@@ -413,6 +445,13 @@ export async function handle(cloud: Cloud, req: IncomingMessage, res: ServerResp
     if (parts[0] === 'app') return await app(cloud, req, res, url, parts);
 
     if (parts[0] === 'k' && parts[1]) {
+      // Anyone can request these paths; the signature is checked before a database connection is spent on them.
+      const kind = parts[2] === 'bon' ? 'bon' : parts[2] === 'factuur' ? 'factuur' : null;
+      const signature = (parts[4] ?? '').replace(/\.pdf$/, '');
+      const scope = { token: cloud.env.linkSecret, linkScope: `/k/${parts[1]}` };
+      if (!/^[0-9a-f]{20}$/.test(parts[1]) || !kind || !parts[3] || !verifyLink(scope, kind, parts[3], signature)) {
+        return send(res, 404, 'Niet gevonden.');
+      }
       const account = await accountByTenant(cloud, parts[1]);
       if (!account) return send(res, 404, 'Niet gevonden.');
       const handled = await withTenant(cloud.connect, cloud.env, account, cloud.mail, (ctx) => handleDocumentLink(ctx, req, res, parts.slice(2)), cloud.now);

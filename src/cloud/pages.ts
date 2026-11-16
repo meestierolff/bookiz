@@ -39,6 +39,7 @@ function shell(title: string, body: string, nonce: string): string {
   .quiet { font-size: 0.95rem; }
   .linkbutton { background: none; border: 0; padding: 0; color: var(--orange-soft); font: inherit; text-decoration: underline; cursor: pointer; }
   .error { color: #ff9b7a; font-weight: 600; }
+  .inline { display: inline; margin-left: 0.4rem; }
 </style>
 </head>
 <body>
@@ -103,6 +104,7 @@ export function dashboardPage(
     overview: Overview;
     missingReceipts: { ref: string; vendor: string; date: string; link: string | null }[];
     years: number[];
+    grants: { clientId: string; name: string; since: string }[];
   },
 ): string {
   const { account, overview } = options;
@@ -152,6 +154,18 @@ ${subscribe}
 </ul>
 <p class="quiet">Je assistent vraagt je daarna om in te loggen met dit e-mailadres en om toestemming te geven. De menu’s van de assistenten veranderen geregeld; zoek op “connector” of “MCP” als het er anders uitziet.</p>
 
+${
+  options.grants.length > 0
+    ? `<h2>Gekoppelde assistenten</h2>
+<ul class="todo">${options.grants
+        .map(
+          (grant) =>
+            `<li>${esc(grant.name)}, sinds ${esc(day(grant.since))} <form method="post" action="/app/revoke" class="inline"><input type="hidden" name="client_id" value="${esc(grant.clientId)}"><button class="linkbutton" type="submit">toegang intrekken</button></form></li>`,
+        )
+        .join('')}</ul>`
+    : ''
+}
+
 <h2>Je administratie</h2>
 ${books}
 ${receipts}
@@ -167,26 +181,44 @@ ${receipts}
 
 export function consentPage(
   nonce: string,
-  options: { authorizationId: string; clientName: string; clientUri: string | null; redirectHost: string; email: string },
+  options: { authorizationId: string; clientName: string; returnTo: { host: string; known: boolean; local: boolean }; email: string },
 ): string {
+  const where = options.returnTo.local
+    ? `een programma op je eigen computer (<strong>${esc(options.returnTo.host)}</strong>)`
+    : `<strong>${esc(options.returnTo.host)}</strong>`;
+  const caution = options.returnTo.known || options.returnTo.local
+    ? ''
+    : `<p class="error" role="alert">Let op: ${esc(options.returnTo.host)} is geen adres van een assistent die wij kennen. De naam hierboven heeft deze toepassing zelf opgegeven. Ga alleen door als je zeker weet van wie dit adres is.</p>`;
   return shell(
     'Toegang geven',
     `<h1>Toegang geven tot je administratie</h1>
-<p><strong>${esc(options.clientName)}</strong> wil namens jou (${esc(options.email)}) met Bookiz werken.</p>
+<p>Een toepassing die zich <strong>${esc(options.clientName)}</strong> noemt wil namens jou (${esc(options.email)}) met Bookiz werken.</p>
+${caution}
 <div class="card">
-  <p>Als je toestemming geeft, kan deze assistent:</p>
+  <p>Als je toestemming geeft, kan deze toepassing:</p>
   <ul class="todo">
     <li>je administratie inzien: facturen, uitgaven, relaties en aangiftes;</li>
     <li>boeken: facturen maken en definitief maken, uitgaven en bonnen vastleggen;</li>
     <li>op jouw verzoek facturen per e-mail versturen en een btw-tijdvak afsluiten.</li>
   </ul>
-  <p class="quiet">Na toestemming gaat je browser terug naar <strong>${esc(options.redirectHost)}</strong>. Ken je dat adres niet, of heb je dit zelf niet gestart, weiger dan.</p>
+  <p class="quiet">De toegang gaat naar ${where}. Geef alleen toestemming als je zojuist zelf Bookiz aan het koppelen was in je assistent. Kreeg je deze pagina via een link van iemand anders, weiger dan. Je kunt de toegang later intrekken op Mijn Bookiz.</p>
 </div>
 <form method="post" action="/oauth/consent">
   <input type="hidden" name="authorization_id" value="${esc(options.authorizationId)}">
   <button class="button pay" type="submit" name="decision" value="approve">Toestemming geven</button>
   <button class="button ghost" type="submit" name="decision" value="deny">Weigeren</button>
 </form>`,
+    nonce,
+  );
+}
+
+/** After the decision: take the browser back to the assistant. */
+export function forwardPage(nonce: string, target: string, host: string): string {
+  return shell(
+    'Terug naar je assistent',
+    `<h1>Je gaat terug naar je assistent</h1>
+<p>Gebeurt er niets? <a id="go" href="${esc(target)}">Ga verder naar ${esc(host)}</a>.</p>
+<script nonce="${nonce}">location.replace(document.getElementById('go').href);</script>`,
     nonce,
   );
 }
