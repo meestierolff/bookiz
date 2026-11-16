@@ -25,7 +25,7 @@ const env: CloudEnv = {
   stripeWebhookSecret: 'whsec_test_secret',
   stripePaymentLink: 'https://buy.stripe.test/abc',
   stripePaymentLinkId: 'plink_bookiz',
-  cronSecret: undefined,
+  operatorToken: 'operator-token-for-tests-0123456789',
   trialDays: 30,
 };
 
@@ -199,7 +199,11 @@ test('only Stripe can activate a subscription, and only once per event', async (
   const server = createServer((req, res) => void handle(cloud, req, res)).listen(0);
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
-    assert.equal((await fetch(`${base}/api/health`)).status, 200);
+    const health = (await (await fetch(`${base}/api/health`)).json()) as Record<string, unknown>;
+    assert.deepEqual(Object.keys(health).sort(), ['ok', 'version'], 'anonymous callers learn nothing about the configuration');
+    const detail = (await (await fetch(`${base}/api/health`, { headers: { authorization: 'Bearer operator-token-for-tests-0123456789' } })).json()) as Record<string, any>;
+    assert.equal(detail.mail.configured, false);
+    assert.equal(detail.mail.library, true);
     const meta = (await (await fetch(`${base}/.well-known/oauth-protected-resource/mcp`)).json()) as Record<string, any>;
     assert.deepEqual(meta.authorization_servers, ['https://project.supabase.test/auth/v1']);
 
