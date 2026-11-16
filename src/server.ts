@@ -39,7 +39,20 @@ export function createServer(ctx: Ctx): McpServer {
 
   function tool<S extends Shape>(
     name: string,
-    config: { title: string; description: string; input: S; readOnly?: boolean; irreversible?: boolean; outbound?: boolean; meta?: Record<string, unknown> },
+    config: {
+      title: string;
+      description: string;
+      input: S;
+      /** Changes nothing at all. */
+      readOnly?: boolean;
+      /** Changes or reverses something that exists, as opposed to only adding a new record. */
+      changes?: boolean;
+      /** Reaches outside Bookiz: sends e-mail or fetches a file. */
+      outbound?: boolean;
+      /** Still allowed when the administration is locked, and not worth an audit line. */
+      housekeeping?: boolean;
+      meta?: Record<string, unknown>;
+    },
     run: (args: z.infer<z.ZodObject<S>>) => Promise<unknown> | unknown,
   ): void {
     server.registerTool(
@@ -51,7 +64,7 @@ export function createServer(ctx: Ctx): McpServer {
         // Honest hints let a client ask the owner before a step that cannot be taken back or leaves the system.
         annotations: {
           readOnlyHint: Boolean(config.readOnly),
-          destructiveHint: Boolean(config.irreversible),
+          destructiveHint: Boolean(config.changes),
           openWorldHint: Boolean(config.outbound),
         },
         ...(config.meta ? { _meta: config.meta } : {}),
@@ -59,7 +72,7 @@ export function createServer(ctx: Ctx): McpServer {
       (async (args: z.infer<z.ZodObject<S>>) => {
         let outcome = 'ok';
         try {
-          if (ctx.locked && !config.readOnly) throw new BookizError(ctx.locked);
+          if (ctx.locked && !config.readOnly && !config.housekeeping) throw new BookizError(ctx.locked);
           const result = await run(args);
           return { content: [{ type: 'text' as const, text: JSON.stringify(inEuros(result), null, 2) }] };
         } catch (error) {
@@ -73,7 +86,7 @@ export function createServer(ctx: Ctx): McpServer {
             content: [{ type: 'text' as const, text: hint ? `${message}\nWat nu: ${hint}` : message }],
           };
         } finally {
-          if (!config.readOnly) {
+          if (!config.readOnly && !config.housekeeping) {
             // The audit trail must never contain the document itself.
             const { content_base64: _omitted, ...logged } = args as Record<string, unknown>;
             await store.logAudit(ctx.db, name, logged, outcome).catch((e) => console.error('[bookiz] audit failed', e));
@@ -88,9 +101,9 @@ export function createServer(ctx: Ctx): McpServer {
     {
       title: 'Overzicht',
       description:
-        'The state of the books right now: open btw periods and deadlines, unpaid and overdue invoices, expenses without a receipt, profit this year, an indication of what to set aside for tax, and a list of next actions. Call this first.',
+        'The state of the books right now: open btw periods and deadlines, unpaid and overdue invoices, expenses without a receipt, profit this year, an indication of what to set aside for tax, and a list of next actions. Call this first. It also prepares a draft for any recurring invoice that has come due; it never finalizes or sends anything.',
       input: {},
-      readOnly: true,
+      housekeeping: true,
     },
     () => reports.overview(ctx),
   );
@@ -101,6 +114,7 @@ export function createServer(ctx: Ctx): McpServer {
       title: 'Bedrijfsgegevens',
       description:
         'Create or update the business profile. Only pass fields that change. Name, address, KvK-nummer, IBAN and (unless the KOR applies) btw-id are legally required on invoices. kor_since is the first day of the kleineondernemersregeling (omit when the business charges btw); kor_until is the last day it applied, set only when the owner left the KOR. Neither may change how documents already booked are treated.',
+      changes: true,
       input: {
         name: optionalText,
         owner_name: optionalText,
@@ -127,6 +141,7 @@ export function createServer(ctx: Ctx): McpServer {
       title: 'Jaargegevens',
       description:
         'Facts about a tax year that documents cannot show. hours_criterion: did the owner work at least 1,225 hours in the business (needed for zelfstandigenaftrek). starter: entitled to startersaftrek. wage_income: gross wage from employment that year, used only to estimate how much tax to set aside. Ask the owner; do not assume.',
+      changes: true,
       input: {
         year: z.number().int().min(2020).max(2100),
         hours_criterion: z.boolean().optional(),
@@ -157,6 +172,7 @@ export function createServer(ctx: Ctx): McpServer {
       title: 'Relatie opslaan',
       description:
         'Create a customer (omit id) or update one (pass id). Name and address are required on an invoice. vat_id is required to invoice an EU business with btw verlegd. country is an ISO code such as NL, BE, DE, US.',
+      changes: true,
       input: {
         id: z.number().int().optional(),
         name: optionalText,
@@ -189,6 +205,7 @@ export function createServer(ctx: Ctx): McpServer {
       title: 'Conceptfactuur',
       description:
         'Create a draft invoice, or replace one by passing draft_id. A draft has no number and changes nothing in the books. unit_price is excluding btw. vat_code per line: high (21%, the default), low (9%), zero, exempt, eu_reverse_charge (services to a business in another EU country, btw verlegd), outside_eu (services to a customer outside the EU). Under the KOR every line is invoiced without btw automatically. Show the result to the owner before finalize_invoice.',
+      changes: true,
       input: {
         draft_id: z.number().int().optional(),
         contact_id: z.number().int(),
@@ -218,7 +235,7 @@ export function createServer(ctx: Ctx): McpServer {
       title: 'Factuur definitief maken',
       description:
         'Turn a draft into a final invoice: it gets the next consecutive number, a PDF, and counts for btw and profit. This cannot be undone, only reversed with credit_invoice. Only call after the owner approved the draft.',
-      irreversible: true,
+      changes: true,
       input: { draft_id: z.number().int() },
     },
     ({ draft_id }) => invoices.finalizeInvoice(ctx, draft_id),
@@ -245,6 +262,7 @@ export function createServer(ctx: Ctx): McpServer {
     {
       title: 'Betaling registreren',
       description: 'Mark a final invoice as paid on a date (default today). Pass paid_on: null to undo a mistake.',
+      changes: true,
       input: { number: z.string(), paid_on: date.nullable().optional() },
     },
     (args) => invoices.registerPayment(ctx, args),
@@ -256,7 +274,7 @@ export function createServer(ctx: Ctx): McpServer {
       title: 'Factuur crediteren',
       description:
         'Reverse a final invoice with a creditfactuur dated today. Use this for any mistake on a final invoice, then create a correct new one.',
-      irreversible: true,
+      changes: true,
       input: { number: z.string(), reason: z.string().max(500).optional() },
     },
     (args) => invoices.creditInvoice(ctx, args),
@@ -279,6 +297,7 @@ export function createServer(ctx: Ctx): McpServer {
       title: 'Periodieke factuur',
       description:
         'Create (omit id), change or stop (active: false) an invoice that repeats every 1, 3 or 12 months, for example a monthly retainer. On each date Bookiz prepares a draft, never a final invoice; get_overview reports the draft and the owner approves it as usual.',
+      changes: true,
       input: {
         id: z.number().int().optional(),
         contact_id: z.number().int().optional(),
@@ -323,6 +342,7 @@ last_invoice_number: the year and the highest sequence number already used there
 open_invoices: invoices sent from the old package that are not paid yet, with their original number and amounts. They appear as outstanding and can be paid or credited here, but do not count again for turnover or btw.
 assets: equipment still being depreciated, at its book value on the switch date, with the original purchase price and the remaining years.
 If the owner uses another package with an MCP server or export, read the figures from there; never estimate them.`,
+      changes: true,
       input: {
         last_invoice_number: z.object({ year: z.number().int().min(2020).max(2100), last_used: z.number().int().min(0).max(99999) }).optional(),
         open_invoices: z
@@ -403,7 +423,7 @@ Refuses a likely duplicate unless allow_duplicate is true. Afterwards, store the
       title: 'Bewijsstuk bewaren',
       description:
         'Store the original receipt or purchase invoice of an expense (JPG, PNG, WEBP, HEIC or PDF, max 10 MB). Pass exactly one source: file when the app hands you an uploaded file object, file_path when Bookiz runs on the same computer as you, url for an https download link, or content_base64. The file is e-mailed to the owner’s archive mailbox or written to the data folder; the database keeps only a SHA-256 hash. If you cannot pass the file, give the owner the upload link from record_expense.',
-      irreversible: true, outbound: true,
+      outbound: true,
       input: {
         ref: z.string().describe('Expense reference, e.g. K2026-001'),
         file: z
@@ -429,7 +449,7 @@ Refuses a likely duplicate unless allow_duplicate is true. Afterwards, store the
     {
       title: 'Uitgave laten vervallen',
       description: 'Cancel an expense that was booked by mistake. It stays visible with the reason. Not possible once its btw period has been filed.',
-      irreversible: true,
+      changes: true,
       input: { ref: z.string(), reason: z.string().trim().min(3).max(300) },
     },
     (args) => expenses.voidExpense(ctx, args),
@@ -464,7 +484,7 @@ Refuses a likely duplicate unless allow_duplicate is true. Afterwards, store the
       title: 'Btw-aangifte afsluiten',
       description:
         'Record that the owner filed the btw-aangifte for a period. This freezes the figures and locks the period. Only call after the owner confirms the filing was actually submitted.',
-      irreversible: true,
+      changes: true,
       input: { period: z.string(), filed_on: date.optional() },
     },
     (args) => reports.markVatReturnFiled(ctx, args),

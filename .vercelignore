@@ -4,3 +4,7 @@ scripts
 Dockerfile
 docker-compose.yml
 .github
+plugin
+.claude-plugin
+server.json
+supabase

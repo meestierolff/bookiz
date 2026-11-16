@@ -1,0 +1,10 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.meestierolff/bookiz",
+  "title": "Bookiz",
+  "description": "Bookkeeping for Dutch sole proprietors with few invoices: invoices, receipts, btw returns.",
+  "version": "0.1.0",
+  "websiteUrl": "https://boekiehouder.nl",
+  "repository": { "url": "https://github.com/meestierolff/bookiz", "source": "github" },
+  "remotes": [{ "type": "streamable-http", "url": "https://boekiehouder.nl/mcp" }]
+}

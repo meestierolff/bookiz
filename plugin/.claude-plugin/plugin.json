@@ -1,0 +1,8 @@
+{
+  "name": "bookiz",
+  "description": "Bookkeeping for Dutch sole proprietors with few invoices. Connects Claude to Bookiz Cloud; you sign in with your e-mail address.",
+  "version": "0.1.0",
+  "homepage": "https://boekiehouder.nl",
+  "repository": "https://github.com/meestierolff/bookiz",
+  "license": "AGPL-3.0-only"
+}

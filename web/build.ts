@@ -177,7 +177,7 @@ function home(): string {
   <div class="wrap">
     <h2>Zo werkt het</h2>
     <ol class="steps">
-      <li><h3>Koppel je assistent</h3><p>Bookiz is een MCP-server. Je voegt hem één keer toe aan Claude, ChatGPT, Codex of een andere assistent die MCP ondersteunt.</p></li>
+      <li><h3>Koppel je assistent</h3><p>Bookiz is een MCP-server. Je voegt hem één keer toe aan Claude, Codex of een andere assistent die eigen MCP-servers toelaat, en logt in met je e-mailadres.</p></li>
       <li><h3>Zeg wat er gebeurd is</h3><p>Stuur een foto van een bon of vraag om een factuur voor tien uur advies. Je assistent leest mee, Bookiz boekt en bewaart het bewijsstuk.</p></li>
       <li><h3>Neem de cijfers over</h3><p>Elk kwartaal staan de bedragen per rubriek klaar, met de deadline erbij. Je typt ze over in Mijn Belastingdienst Zakelijk.</p></li>
     </ol>
@@ -259,7 +259,7 @@ ${highlighted
         <p class="incl">${euro(cloudIncl)} inclusief btw. Eerste dertig dagen gratis.</p>
         <p class="what">Wij hosten het. Jij koppelt alleen je assistent.</p>
         <ul>
-          <li>Inloggen vanuit Claude, ChatGPT of Grok</li>
+          <li>Inloggen vanuit je assistent, zonder wachtwoord of sleutel</li>
           <li>Facturen versturen vanaf een betrouwbaar adres</li>
           <li>Bonnen naar je eigen mailbox, geen opslag bij ons</li>
         </ul>
