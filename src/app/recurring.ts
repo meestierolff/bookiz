@@ -94,6 +94,7 @@ export async function draftDueRecurring(ctx: Ctx): Promise<{ draft_id: number; c
         note: recurring.note ?? undefined,
       });
       created.push({ draft_id: draft.draft_id, customer: draft.customer, for_date: next });
+      await store.logAudit(ctx.db, 'recurring_draft', { recurring_id: recurring.id, draft_id: draft.draft_id, for_date: next }, 'ok');
       next = addMonths(next, recurring.every_months);
       // Move the date forward straight away, so a failure further on cannot create the same draft twice.
       await store.saveRecurring(ctx.db, recurring.id, { ...recurring, next_date: next });

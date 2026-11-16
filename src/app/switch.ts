@@ -14,6 +14,8 @@ import { type Ctx, openPeriodFor, todayOf } from './context.ts';
  * that are still unpaid, and assets that are still being depreciated.
  */
 export type OpeningInput = {
+  /** First day the books are kept here. */
+  switch_date: string;
   last_invoice_number?: { year: number; last_used: number } | undefined;
   open_invoices?:
     | {
@@ -34,20 +36,37 @@ export type OpeningInput = {
         book_value: number;
         remaining_years: number;
         residual_value?: number | undefined;
-        opening_date: string;
+        opening_date?: string | undefined;
       }[]
     | undefined;
 };
 
 export async function importOpeningState(ctx: Ctx, input: OpeningInput) {
   const todayDate = todayOf(ctx);
+  const switchDate = assertDate(input.switch_date, 'overstapdatum');
+  if (switchDate > todayDate) throw new BookizError(`De overstapdatum ${switchDate} ligt in de toekomst.`, 'Neem de gegevens over op of na de dag van de overstap.');
+  rulesFor(yearOf(switchDate));
   const done: string[] = [];
   const notes: string[] = [
     'Bewaar zelf een volledige export van je oude pakket: Bookiz neemt de oude jaren niet over en je moet ze zeven jaar kunnen tonen.',
   ];
 
   await ctx.db.transaction(async (tx) => {
-    const business = await store.lockBusiness(tx);
+    let business = await store.lockBusiness(tx);
+    const own = [
+      ...(await store.listInvoices(tx)).filter((i) => i.status === 'final' && !i.imported).map((i) => ({ what: `factuur ${i.number}`, date: i.issue_date })),
+      ...(await store.listExpenses(tx)).filter((e) => !e.voided_at && !e.imported).map((e) => ({ what: `uitgave ${e.ref}`, date: e.date })),
+    ].find((doc) => doc.date < switchDate);
+    if (own) {
+      throw new BookizError(
+        `Er staat hier al een ${own.what} van ${own.date}, vóór de overstapdatum ${switchDate}.`,
+        'Kies een overstapdatum op of vóór je eerste boeking in Bookiz.',
+      );
+    }
+    if (business.books_start !== switchDate) {
+      business = await store.saveBusiness(tx, { books_start: switchDate });
+      done.push(`De administratie in Bookiz begint op ${switchDate}; alles daarvóór hoort bij je oude pakket.`);
+    }
 
     if (input.last_invoice_number) {
       const { year, last_used } = input.last_invoice_number;
@@ -65,7 +84,12 @@ export async function importOpeningState(ctx: Ctx, input: OpeningInput) {
     for (const open of input.open_invoices ?? []) {
       const issueDate = assertDate(open.issue_date, 'factuurdatum');
       const dueDate = assertDate(open.due_date, 'vervaldatum');
-      if (issueDate > todayDate) throw new BookizError(`Factuur ${open.number} heeft een datum in de toekomst.`);
+      if (issueDate >= switchDate) {
+        throw new BookizError(
+          `Factuur ${open.number} is van ${issueDate}, op of na de overstapdatum.`,
+          'Zo’n factuur hoort al in Bookiz: maak hem hier met create_invoice in plaats van hem over te nemen.',
+        );
+      }
       const contact = await store.getContact(tx, open.contact_id);
       const net = toCents(open.net);
       const vat = toCents(open.vat);
@@ -105,8 +129,8 @@ export async function importOpeningState(ctx: Ctx, input: OpeningInput) {
 
     const filings = await store.listFilings(tx);
     for (const asset of input.assets ?? []) {
-      const openingDate = assertDate(asset.opening_date, 'overnamedatum');
-      if (openingDate > todayDate) throw new BookizError(`De overnamedatum ${openingDate} ligt in de toekomst.`);
+      const openingDate = asset.opening_date ? assertDate(asset.opening_date, 'overnamedatum') : switchDate;
+      if (openingDate > todayDate || openingDate < switchDate) throw new BookizError(`De overnamedatum ${openingDate} moet op of na de overstapdatum liggen en niet in de toekomst.`);
       rulesFor(yearOf(openingDate));
       const book = toCents(asset.book_value);
       const original = toCents(asset.original_cost);
@@ -144,6 +168,5 @@ export async function importOpeningState(ctx: Ctx, input: OpeningInput) {
   if ((input.assets ?? []).length > 0) {
     notes.push('Overgenomen bedrijfsmiddelen tellen niet mee voor de investeringsaftrek; die hoort bij het jaar van aanschaf.');
   }
-  if (done.length === 0) throw new BookizError('Er is niets opgegeven om over te nemen.', 'Geef last_invoice_number, open_invoices of assets mee.');
   return { imported: done, notes };
 }

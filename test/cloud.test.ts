@@ -24,6 +24,7 @@ const env: CloudEnv = {
   mailFrom: undefined,
   stripeWebhookSecret: 'whsec_test_secret',
   stripePaymentLink: 'https://buy.stripe.test/abc',
+  stripePaymentLinkId: 'plink_bookiz',
   cronSecret: undefined,
   trialDays: 30,
 };
@@ -155,6 +156,40 @@ test('cloud receipts go to the account address and respect the smaller upload li
   assert.equal(sent[0]?.to, 'alice@example.test');
 });
 
+test('an account that has not paid can only mail its own owner', async () => {
+  const { cloud, raw } = await embeddedCloud();
+  await raw.exec((await import('../src/cloud/tenants.ts')).CONTROL_SCHEMA);
+  const account = await ensureAccount(cloud.connect, env, alice);
+  const sent: { to: string; cc?: string }[] = [];
+  const mail = (async (m: { to: string; cc?: string }) => {
+    sent.push(m);
+    return { messageId: '<m>' };
+  }) as never;
+  const stranger = async (acc: typeof account) =>
+    withTenant(
+      cloud.connect,
+      env,
+      acc,
+      mail,
+      async (ctx) => {
+        await store.saveBusiness(ctx.db, { name: 'Alice', address_line: 'Straat 1', postal_code: '1234 AB', city: 'Utrecht', kvk_number: '12345678', vat_id: 'NL123456789B01', iban: 'NL00BANK0123456789', email: 'alice-zaak@example.test', archive_email: 'elders@example.test' });
+        const contact = await store.saveContact(ctx.db, undefined, { name: 'Onbekende', address_line: 'Kade 1', city: 'Zwolle', email: 'victim@example.test' });
+        const draft = await invoices.createInvoice(ctx, { contact_id: contact.id, lines: [{ description: 'Werk', quantity: 1, unit_price: 100 }] });
+        const invoice = await invoices.finalizeInvoice(ctx, draft.draft_id);
+        return invoices.sendInvoice(ctx, { number: invoice.number as string });
+      },
+      cloud.now,
+    );
+  const onTrial = await stranger(account);
+  assert.equal(onTrial.sent_to, 'alice@example.test');
+  assert.match(onTrial.note ?? '', /alleen naar je eigen adres/);
+  assert.deepEqual([sent[0]?.to, sent[0]?.cc], ['alice@example.test', undefined]);
+
+  const paying = await stranger({ ...account, status: 'active', paid_until: '2028-01-01T00:00:00Z' });
+  assert.equal(paying.sent_to, 'victim@example.test');
+  assert.equal(sent[1]?.cc, 'alice-zaak@example.test');
+});
+
 function stripeHeader(body: string, secret: string, at: number): string {
   return `t=${at},v1=${createHmac('sha256', secret).update(`${at}.${body}`).digest('hex')}`;
 }
@@ -176,7 +211,7 @@ test('only Stripe can activate a subscription, and only once per event', async (
     const event = JSON.stringify({
       id: 'evt_1',
       type: 'checkout.session.completed',
-      data: { object: { payment_status: 'paid', client_reference_id: alice.id, customer: 'cus_1' } },
+      data: { object: { mode: 'subscription', payment_link: 'plink_bookiz', payment_status: 'paid', client_reference_id: alice.id, customer: 'cus_1' } },
     });
     const at = Math.floor(cloud.now().getTime() / 1000);
 
@@ -185,6 +220,15 @@ test('only Stripe can activate a subscription, and only once per event', async (
     const stale = await fetch(`${base}/api/stripe/webhook`, { method: 'POST', body: event, headers: { 'stripe-signature': stripeHeader(event, 'whsec_test_secret', at - 3600) } });
     assert.equal(stale.status, 400);
     const control = await cloud.connect();
+    assert.equal((await findAccount(control, alice.id))?.status, 'trial');
+
+    // Another product sold from the same Stripe account, with our customer's id pasted into its link: not a Bookiz payment.
+    const other = JSON.stringify({
+      id: 'evt_other',
+      type: 'checkout.session.completed',
+      data: { object: { mode: 'payment', payment_link: 'plink_cheap', payment_status: 'paid', client_reference_id: alice.id, customer: 'cus_x' } },
+    });
+    assert.equal((await fetch(`${base}/api/stripe/webhook`, { method: 'POST', body: other, headers: { 'stripe-signature': stripeHeader(other, 'whsec_test_secret', at) } })).status, 200);
     assert.equal((await findAccount(control, alice.id))?.status, 'trial');
 
     const good = { method: 'POST', body: event, headers: { 'stripe-signature': stripeHeader(event, 'whsec_test_secret', at) } };
@@ -203,6 +247,12 @@ test('only Stripe can activate a subscription, and only once per event', async (
     assert.equal((await fetch(`${base}/k/${account.tenant}/factuur/2026-001/${'a'.repeat(32)}.pdf`)).status, 404);
     const crossSite = await fetch(`${base}/app/logout`, { method: 'POST', headers: { origin: 'https://evil.example' } });
     assert.equal(crossSite.status, 403);
+    const login = await fetch(`${base}/app/login`);
+    // With `no-referrer` a browser posts our own form with `Origin: null`, and sign-in would refuse itself.
+    assert.equal(login.headers.get('referrer-policy'), 'same-origin');
+    assert.match(login.headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/);
+    const closed = await fetch(`${base}/app/login`, { method: 'POST', headers: { origin: 'https://bookiz.test', 'content-type': 'application/x-www-form-urlencoded' }, body: 'email=a%40example.test' });
+    assert.equal(closed.status, 503, 'without mail configured nobody is created and no code is issued');
     assert.equal(verifyStripeSignature('s', Buffer.from('x'), 'garbage', at), false);
     void raw;
   } finally {

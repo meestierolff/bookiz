@@ -148,4 +148,8 @@ export const MIGRATIONS: string[] = [
   );
   alter table recurring_invoice enable row level security;
   `,
+  // After a switch, nothing before this day belongs to these books.
+  `
+  alter table business add column books_start date;
+  `,
 ];

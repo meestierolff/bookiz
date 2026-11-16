@@ -113,6 +113,13 @@ test('over HTTP: token required, receipt upload page and invoice PDF behind sign
       await client.close();
     }
 
+    const batch = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+      body: JSON.stringify([{ jsonrpc: '2.0', id: 1, method: 'tools/list' }]),
+    });
+    assert.equal(batch.status, 400, 'a batch would run calls side by side on one connection');
+
     const customer = await seed(ctx);
     const expense = await expenses.recordExpense(ctx, { date: '2026-11-10', vendor: 'Bakker', amount: 8.72, vat_amount: 0.72 });
     const link = uploadLink(ctx.config, expense.ref) as string;

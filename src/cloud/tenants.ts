@@ -86,6 +86,9 @@ export async function findAccount(control: Db, userId: string): Promise<Account 
 export async function ensureAccount(connect: Connector, env: CloudEnv, user: { id: string; email: string }): Promise<Account> {
   const control = await connect();
   try {
+    // An assistant often opens with several requests at once. One of them creates
+    // the administration; the others wait here instead of creating it too.
+    await control.query('select pg_advisory_lock(hashtext($1))', [`bookiz-account:${user.id}`]);
     let account = await findAccount(control, user.id);
     if (!account) {
       const tenant = randomBytes(10).toString('hex');
@@ -109,6 +112,7 @@ export async function ensureAccount(connect: Connector, env: CloudEnv, user: { i
     }
     return account;
   } finally {
+    await control.query('select pg_advisory_unlock_all()').catch(() => undefined);
     await control.close();
   }
 }
@@ -145,6 +149,11 @@ export function tenantConfig(env: CloudEnv, account: Account): Config {
     maxReceiptBytes: 4 * 1024 * 1024,
     fallbackArchiveEmail: account.email,
     dailyMailLimit: 25,
+    // A free trial needs no card, so it must not be a way to mail strangers from our domain.
+    mailOnlyTo: account.status === 'active' ? undefined : account.email,
+    // A receipt carries an attachment the customer supplies. It goes to the address they proved is theirs, nowhere else.
+    receiptsOnlyTo: account.email,
+    dailyReceiptLimit: 100,
   };
 }
 

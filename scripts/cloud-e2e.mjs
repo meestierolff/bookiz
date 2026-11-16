@@ -80,6 +80,9 @@ try {
   ok('receipt upload link works', upPage.status === 200 && (await upPage.text()).includes('Kies een foto'), up.slice(0, 70));
   const tokenB = await oauthToken(b);
   const B = await mcpClient(tokenB);
+  // An assistant often opens with several calls at once; the very first use must survive that.
+  const burst = await Promise.all([1, 2, 3, 4, 5].map(() => B.call('get_overview')));
+  ok('five parallel first calls all succeed', burst.every((r) => r.setup === 'nog niet ingericht'), JSON.stringify(burst.find((r) => r.setup !== 'nog niet ingericht') ?? '').slice(0, 160));
   ok('second customer sees nothing of the first', (await B.call('get_overview')).setup === 'nog niet ingericht' && (await B.call('list_invoices')).count === 0);
   const foreign = inv.pdf.replace(/\/k\/[0-9a-f]{20}\//, (m) => m.replace(/[0-9a-f]{20}/, '0'.repeat(20)));
   ok('invoice link is worthless under another tenant', (await fetch(foreign)).status === 404);

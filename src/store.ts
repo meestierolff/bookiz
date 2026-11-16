@@ -18,6 +18,7 @@ const BUSINESS_FIELDS = [
   'kor_until',
   'vat_period',
   'payment_term_days',
+  'books_start',
 ] as const satisfies readonly (keyof Business)[];
 
 const CONTACT_FIELDS = [
@@ -347,6 +348,17 @@ export async function saveFiling(q: Queryable, filing: VatFiling): Promise<void>
     'insert into vat_filing (period, filed_on, figures, payable_euros) values ($1, $2, $3::jsonb, $4)',
     [filing.period, filing.filed_on, JSON.stringify(filing.figures), filing.payable_euros],
   );
+}
+
+/**
+ * Claim one slot of a daily allowance, or refuse. Must run inside a transaction
+ * that holds the business lock, so parallel requests cannot share the last slot.
+ */
+export async function claimDaily(tx: Queryable, kind: string, limit: number, detail: unknown): Promise<boolean> {
+  const used = await tx.query<{ n: number }>("select count(*)::int as n from audit_log where tool = $1 and at > now() - interval '1 day'", [kind]);
+  if ((used[0]?.n ?? 0) >= limit) return false;
+  await logAudit(tx, kind, detail, 'reserved');
+  return true;
 }
 
 export async function logAudit(q: Queryable, tool: string, input: unknown, outcome: string): Promise<void> {

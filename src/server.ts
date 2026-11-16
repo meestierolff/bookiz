@@ -338,12 +338,14 @@ export function createServer(ctx: Ctx): McpServer {
     {
       title: 'Overstappen',
       description: `Take over what is still alive when the owner switches from another bookkeeping package (Moneybird, e-Boekhouden, Jortt, a spreadsheet). Use it once, after setup_business and after creating the customers with save_contact. It does NOT copy the old administration: the owner keeps an export of the old package for seven years.
+switch_date: the first day the books are kept here; btw returns and reports start from that day.
 last_invoice_number: the year and the highest sequence number already used there, so numbering continues without a gap or duplicate (not needed when switching on 1 January).
 open_invoices: invoices sent from the old package that are not paid yet, with their original number and amounts. They appear as outstanding and can be paid or credited here, but do not count again for turnover or btw.
 assets: equipment still being depreciated, at its book value on the switch date, with the original purchase price and the remaining years.
 If the owner uses another package with an MCP server or export, read the figures from there; never estimate them.`,
       changes: true,
       input: {
+        switch_date: date.describe('First day the books are kept in Bookiz, e.g. 2027-01-01. Nothing dated earlier can be booked here afterwards.'),
         last_invoice_number: z.object({ year: z.number().int().min(2020).max(2100), last_used: z.number().int().min(0).max(99999) }).optional(),
         open_invoices: z
           .array(
@@ -368,7 +370,7 @@ If the owner uses another package with an MCP server or export, read the figures
               book_value: euros.positive().describe('Value still on the books on the switch date'),
               remaining_years: z.number().int().min(1).max(50),
               residual_value: euros.nonnegative().optional(),
-              opening_date: date.describe('The switch date, e.g. 2027-01-01'),
+              opening_date: date.optional().describe('Defaults to switch_date'),
             }),
           )
           .max(50)

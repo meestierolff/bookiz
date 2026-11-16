@@ -30,6 +30,16 @@ export type InvoiceInput = {
   note?: string | undefined;
 };
 
+/** After a switch, a date before the switch belongs to the old package, not here. */
+export function assertInBooks(business: Business, date: string): void {
+  if (business.books_start && date < business.books_start) {
+    throw new BookizError(
+      `${date} ligt vóór ${business.books_start}, de dag waarop je naar Bookiz bent overgestapt.`,
+      'Boek dit in je oude pakket, want daar hoort dat tijdvak. Hier begint de administratie op de overstapdatum.',
+    );
+  }
+}
+
 export type InvoiceStatus = 'concept' | 'open' | 'te laat' | 'betaald';
 
 export function statusOf(invoice: Invoice, todayDate: IsoDate): InvoiceStatus {
@@ -84,6 +94,7 @@ export async function createInvoice(ctx: Ctx, input: InvoiceInput) {
   const business = await store.requireBusiness(ctx.db);
   const contact = await store.getContact(ctx.db, input.contact_id);
   const issueDate = assertDate(input.issue_date ?? todayOf(ctx), 'factuurdatum');
+  assertInBooks(business, issueDate);
   const supplyDate = input.supply_date ? assertDate(input.supply_date, 'leverdatum') : null;
   const rules = rulesFor(yearOf(issueDate));
   const kor = korActive(business, issueDate);
@@ -266,7 +277,9 @@ export async function sendInvoice(ctx: Ctx, input: { number: string; to?: string
     );
   }
   const business = await store.requireBusiness(ctx.db);
-  const to = input.to ?? invoice.contact_snapshot?.email;
+  const intended = input.to ?? invoice.contact_snapshot?.email;
+  // An account that has not paid yet can try sending, but only to itself.
+  const to = ctx.config.mailOnlyTo ?? intended;
   if (!to) {
     throw new BookizError(
       `Er is geen e-mailadres bekend van ${invoice.contact_snapshot?.name ?? 'deze klant'}.`,
@@ -279,16 +292,12 @@ export async function sendInvoice(ctx: Ctx, input: { number: string; to?: string
     // cannot both take the last one, and a failed send still counts.
     await ctx.db.transaction(async (tx) => {
       await store.lockBusiness(tx);
-      const used = await tx.query<{ n: number }>(
-        "select count(*)::int as n from audit_log where tool = 'mail_quota' and at > now() - interval '1 day'",
-      );
-      if ((used[0]?.n ?? 0) >= limit) {
+      if (!(await store.claimDaily(tx, 'mail_quota', limit, { number: invoice.number, to }))) {
         throw new BookizError(
           `Je hebt in de afgelopen 24 uur al ${limit} facturen verstuurd; meer kan pas later.`,
           'De pdf kun je altijd zelf downloaden en versturen.',
         );
       }
-      await store.logAudit(tx, 'mail_quota', { number: invoice.number, to }, 'reserved');
     });
   }
   const isCredit = invoice.total_cents < 0;
@@ -308,7 +317,7 @@ export async function sendInvoice(ctx: Ctx, input: { number: string; to?: string
   const { messageId } = await ctx.mail({
     to,
     // A copy to the owner keeps the sent invoice in their own mailbox.
-    ...(business.email ? { cc: business.email, replyTo: business.email } : {}),
+    ...(business.email && !ctx.config.mailOnlyTo ? { cc: business.email, replyTo: business.email } : {}),
     subject: `${isCredit ? 'Creditfactuur' : 'Factuur'} ${invoice.number} van ${business.name}`,
     text,
     attachments: [
@@ -316,7 +325,17 @@ export async function sendInvoice(ctx: Ctx, input: { number: string; to?: string
     ],
   });
   await store.setInvoiceSent(ctx.db, invoice.id);
-  return { number: invoice.number, sent_to: to, copy_to: business.email, message_id: messageId };
+  return {
+    number: invoice.number,
+    sent_to: to,
+    copy_to: ctx.config.mailOnlyTo ? null : business.email,
+    message_id: messageId,
+    ...(ctx.config.mailOnlyTo
+      ? {
+          note: `Tijdens de proefperiode stuurt Bookiz facturen alleen naar je eigen adres (${to}), niet naar ${intended ?? 'je klant'}. Stuur de e-mail zelf door, of neem een abonnement om rechtstreeks te versturen.`,
+        }
+      : {}),
+  };
 }
 
 export async function registerPayment(ctx: Ctx, input: { number: string; paid_on?: string | null | undefined }) {

@@ -23,6 +23,12 @@ export type Config = {
   fallbackArchiveEmail: string | undefined;
   /** Upper bound on invoices mailed per day, to keep a shared sending domain clean. */
   dailyMailLimit: number | undefined;
+  /** When set, every e-mail goes to this address only (an unpaid Cloud account mails nobody but its owner). */
+  mailOnlyTo: string | undefined;
+  /** When set, receipts are archived to this address and no other (the verified account address in Cloud). */
+  receiptsOnlyTo: string | undefined;
+  /** Upper bound on receipts mailed per day. */
+  dailyReceiptLimit: number | undefined;
 };
 
 export const DEFAULT_MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
@@ -66,5 +72,8 @@ export function loadConfig(mode: Mode, env: NodeJS.ProcessEnv = process.env): Co
     maxReceiptBytes: DEFAULT_MAX_RECEIPT_BYTES,
     fallbackArchiveEmail: undefined,
     dailyMailLimit: undefined,
+    mailOnlyTo: undefined,
+    receiptsOnlyTo: undefined,
+    dailyReceiptLimit: undefined,
   };
 }
