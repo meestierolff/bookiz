@@ -1,8 +1,9 @@
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type RuleKey, type RuleSet, rulesFor } from '../src/rules.ts';
-import { type Company, privacy, terms } from './legal.ts';
+import { landingBody, landingData, landingFaq } from './landing.ts';
+import { type Company, privacy, terms, who } from './legal.ts';
 import { switchBody, switchFaq, type SwitchFacts } from './switch.ts';
 
 /**
@@ -17,16 +18,17 @@ const site = JSON.parse(readFileSync(join(here, 'site.json'), 'utf8')) as {
   site_url: string;
   repo_url: string;
   contact_email: string;
-  company: { name: string; kvk: string; vat_id: string; address: string };
+  company: { name: string; legal_name: string; legal_form: string; kvk: string; vat_id: string; address: string };
   /** `open` goes true once sign-in mail works; until then the site does not invite anyone to sign up. */
-  cloud: { price_year_excl: number; stripe_link: string; open: boolean };
+  cloud: { price_year_excl: number; price_month_excl: number; trial_days: number; stripe_link: string; open: boolean };
   dfy: { price_year_excl: number; founding_price_year_excl: number; founding_seats: number; stripe_link: string };
 };
 
 const YEAR = 2026;
-const company: Company = { ...site.company, email: site.contact_email };
-const rules: RuleSet = rulesFor(YEAR);
 const warnings: string[] = [];
+const company: Company = { ...site.company, email: site.contact_email };
+if (!company.vat_id) warnings.push('company.vat_id is empty in web/site.json: the footer and legal pages show no btw-id');
+const rules: RuleSet = rulesFor(YEAR);
 
 const esc = (value: string) =>
   value.replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char] as string);
@@ -34,14 +36,6 @@ const euro = (amount: number) =>
   `€ ${amount.toLocaleString('nl-NL', { minimumFractionDigits: Number.isInteger(amount) ? 0 : 2, maximumFractionDigits: 2 })}`;
 const inclVat = (amount: number) => Math.round(amount * (100 + rules.rules.btw_tarief_hoog.value)) / 100;
 const dutchDate = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' });
-
-function payButton(link: string, label: string, name: string): string {
-  if (!/^https:\/\/\S+$/.test(link)) {
-    warnings.push(`${name}: no payment link in web/site.json, the button shows "Voorverkoop opent binnenkort"`);
-    return '<span class="button waiting">Voorverkoop opent binnenkort</span>';
-  }
-  return `<a class="button pay" href="${esc(link)}">${label}</a>`;
-}
 
 function ruleValue(key: RuleKey): string {
   const rule = rules.rules[key];
@@ -53,52 +47,66 @@ function ruleValue(key: RuleKey): string {
   return `${rule.value.toLocaleString('nl-NL')}${unit === '%' ? '%' : ` ${unit}`}`.trim();
 }
 
-const faq: [string, string][] = [
-  [
-    'Heb ik een AI-assistent nodig?',
-    'Ja. Bookiz heeft geen eigen chatbot en verkoopt geen AI-tegoed. Je gebruikt de assistent die je al hebt, zolang die MCP ondersteunt, de standaard waarmee assistenten met andere software praten.',
-  ],
-  [
-    'Dient Bookiz mijn btw-aangifte in?',
-    'Nee. Bookiz rekent de bedragen per rubriek uit, in hele euro’s, met erbij welke facturen en bonnen erachter zitten. Jij neemt ze over in Mijn Belastingdienst Zakelijk. Bij Done for you doet een boekhouder de aangiftes voor je.',
-  ],
-  [
-    'Waar blijven mijn bonnen?',
-    'Bij jou. Bookiz mailt elke bon naar je eigen mailbox, of zet hem in een map als je zelf host, en bewaart zelf alleen een controlegetal waarmee je kunt aantonen dat het bestand niet is veranderd. Je moet bonnen zeven jaar bewaren, dus gooi die e-mails niet weg.',
-  ],
-  [
-    'Ik doe mee aan de kleineondernemersregeling. Werkt dit dan ook?',
-    `Ja. Je facturen gaan zonder btw de deur uit, je kosten tellen inclusief btw en Bookiz houdt je omzet bij tegen de grens van ${euro(rules.rules.kor_omzetgrens.value)}. Een factuur waarmee je over de grens gaat, houdt Bookiz tegen.`,
-  ],
-  [
-    'Is dit belastingadvies?',
-    'Nee. Bookiz rekent volgens de regels die de Belastingdienst publiceert en laat bij elk bedrag de bron zien. Het weet niets van je partner, je hypotheek of je spaargeld. Voor advies ga je naar een boekhouder.',
-  ],
-  [
-    'Wat als ik wil stoppen?',
-    'Dan vraag je je assistent om een export. Je krijgt alle facturen, uitgaven, aangiftes en het jaaroverzicht in één bestand. De software is open source, dus je kunt haar ook zelf blijven draaien.',
-  ],
-  [
-    'Kan ik overstappen vanuit mijn huidige boekhoudpakket?',
-    'Ja. Het eenvoudigst is per 1 januari: je neemt je klanten, je onbetaalde facturen en je bedrijfsmiddelen mee, en bewaart je oude jaren als export. Op de pagina Overstappen staat het stap voor stap.',
-  ],
-  [
-    'Wat betekent voorverkoop bij Done for you?',
-    'Done for you is er nog niet. De aangiftes worden gedaan door een zelfstandige boekhouder, en we starten zodra die samenwerking rond is.',
-  ],
-];
+const GITHUB_ICON = '<img src="/logos/github-white.svg" alt="">';
 
-const highlighted: RuleKey[] = [
-  'kor_omzetgrens',
-  'zelfstandigenaftrek',
-  'mkb_winstvrijstelling',
-  'investering_drempel',
-  'kilometervergoeding',
-  'beperkt_aftrekbaar_pct',
-];
+function header(onHome: boolean): string {
+  const at = (anchor: string) => (onHome ? `#${anchor}` : `/#${anchor}`);
+  return `<header class="hdr">
+  <div class="hdr-row">
+    <a class="brand" href="${onHome ? '#top' : '/'}"><img src="/logo.png" alt="" width="30" height="30"><span>Bookiz</span></a>
+    <nav aria-label="Hoofdmenu">
+      <a href="${at('agents')}">Agents</a>
+      <a href="${at('live')}">Demo</a>
+      <a href="${at('voorwie')}">Voor wie</a>
+      <a href="/overstappen/">Overstappen</a>
+      <a href="${at('prijzen')}">Prijzen</a>
+      <a href="${at('faq')}">FAQ</a>
+      ${site.cloud.open ? '<a href="/app">Inloggen</a>' : ''}
+    </nav>
+    <div class="hdr-actions">
+      <a class="pill pill-outline" href="${esc(site.repo_url)}">${GITHUB_ICON}GitHub</a>
+      <a class="pill pill-orange" href="${at('prijzen')}">Begin voor € 0 <span class="raquo">»</span></a>
+    </div>
+  </div>
+</header>`;
+}
 
-function page(options: { path: string; title: string; description: string; body: string; jsonLd?: unknown[] }): string {
+function footer(onHome: boolean): string {
+  const at = (anchor: string) => (onHome ? `#${anchor}` : `/#${anchor}`);
+  const legal = [
+    esc(who(company)),
+    company.address && esc(company.address),
+    company.kvk && `KvK ${esc(company.kvk)}`,
+    company.vat_id && `btw-id ${esc(company.vat_id)}`,
+    `<a href="mailto:${esc(company.email)}">${esc(company.email)}</a>`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return `<footer class="ftr">
+  <div class="ftr-inner">
+    <div class="ftr-top">
+      <div class="ftr-about">
+        <a class="brand" href="${onHome ? '#top' : '/'}"><img src="/logo.png" alt="" width="34" height="34"><span>Bookiz</span></a>
+        <p>Boekhouding voor eenmanszaken met weinig facturen. Je praat met je assistent, Bookiz houdt de boeken bij.</p>
+      </div>
+      <div class="ftr-cols">
+        <div><h3>Product</h3><a href="${at('agents')}">Agents</a><a href="${at('live')}">Demo</a><a href="${at('prijzen')}">Prijzen</a><a href="/overstappen/">Overstappen</a></div>
+        <div><h3>Open source</h3><a href="${esc(site.repo_url)}">GitHub</a><a href="/belastingregels-${YEAR}/">Belastingregels ${YEAR}</a><a href="${esc(site.repo_url)}/issues">Fout melden</a></div>
+        <div><h3>Bookiz</h3><a href="${at('founder')}">Over de maker</a><a href="${at('faq')}">FAQ</a><a href="/privacy/">Privacy</a><a href="/voorwaarden/">Voorwaarden</a></div>
+      </div>
+    </div>
+    <div class="ftr-big" aria-hidden="true">Bookiz</div>
+    <div class="ftr-legal">
+      <p>Bookiz rekent. Het doet geen aangifte voor je en is geen belastingadvies. Regels voor ${YEAR} voor het laatst met de bron vergeleken op ${dutchDate(rules.checked_on)}. Versie 0.1.<br>${legal}</p>
+      <span>Engine AGPL-3.0 · Regels MIT · Gemaakt in Nederland</span>
+    </div>
+  </div>
+</footer>`;
+}
+
+function page(options: { path: string; title: string; description: string; body: string; jsonLd?: unknown[]; data?: string }): string {
   const url = `${site.site_url}${options.path}`;
+  const onHome = options.path === '/';
   return `<!doctype html>
 <html lang="nl">
 <head>
@@ -112,193 +120,44 @@ function page(options: { path: string; title: string; description: string; body:
 <meta property="og:title" content="${esc(options.title)}">
 <meta property="og:description" content="${esc(options.description)}">
 <meta property="og:url" content="${esc(url)}">
+<meta property="og:image" content="${site.site_url}/logo.png">
 <link rel="preload" href="/fonts/bricolage-grotesque.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="icon" type="image/png" href="/favicon.png">
 <meta name="theme-color" content="#0d0d0d">
 <link rel="stylesheet" href="/site.css">
 ${(options.jsonLd ?? []).map((data) => `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`).join('\n')}
+${options.data ? `<script type="application/json" id="bz-data">${options.data}</script>` : ''}
+<script src="/site.js" defer></script>
 </head>
 <body>
-<header class="wrap top">
-  <a class="brand" href="/"><img src="/logo.png" alt="" width="34" height="34">Bookiz</a>
-  <nav aria-label="Hoofdmenu">
-    <a href="/overstappen/">Overstappen</a>
-    <a href="/#prijzen">Prijzen</a>
-    <a href="/belastingregels-${YEAR}/">Regels ${YEAR}</a>
-    ${site.repo_url ? `<a href="${esc(site.repo_url)}">GitHub</a>` : ''}
-    ${site.cloud.open ? '<a class="button" href="/app">Inloggen</a>' : ''}
-  </nav>
-</header>
+${header(onHome)}
 ${options.body}
-<footer class="wrap foot">
-  <p>Bookiz is software, geen belastingadviseur. De berekeningen volgen de openbare regels in de repository; controleer ze voordat je aangifte doet.</p>
-  <p>Regels voor ${YEAR} voor het laatst met de bron vergeleken op ${dutchDate(rules.checked_on)}. Broncode onder AGPL-3.0, de regels onder MIT.</p>
-  <p>${[esc(company.name), esc(company.address), company.kvk && `KvK ${esc(company.kvk)}`, company.vat_id && `Btw-id ${esc(company.vat_id)}`, `<a href="mailto:${esc(company.email)}">${esc(company.email)}</a>`, '<a href="/privacy/">Privacy</a>', '<a href="/voorwaarden/">Voorwaarden</a>'].filter(Boolean).join(' · ')}</p>
-</footer>
+${footer(onHome)}
 </body>
 </html>
 `;
 }
 
 function home(): string {
-  const cloudIncl = inclVat(site.cloud.price_year_excl);
-  const foundingIncl = inclVat(site.dfy.founding_price_year_excl);
-  const repoButton = site.repo_url
-    ? `<a class="button" href="${esc(site.repo_url)}">Zelf hosten, gratis</a>`
-    : '<span class="button waiting">Repository volgt</span>';
-  if (!site.repo_url) warnings.push('repo_url is empty in web/site.json: the self-host buttons show "Repository volgt"');
-
-  const body = `<main>
-<section class="wrap hero">
-  <img class="mark" src="/logo.png" alt="" width="641" height="641">
-  <h1>Boekhouden voor wie weinig factureert.</h1>
-  <p class="lead">Een handvol facturen per jaar, een stapel bonnen en vier keer btw-aangifte. Bookiz houdt het bij terwijl je er met je eigen AI-assistent over praat. Open source, en elke belastingregel met de bron erbij.</p>
-  <div class="actions">${repoButton}<a class="button ghost" href="#prijzen">Of laat het ons hosten</a></div>
-</section>
-
-<section class="wrap sheet-wrap">
-  <div class="sheet" aria-label="Voorbeeld van een kwartaal in Bookiz">
-    <h2>Kasboek, vierde kwartaal ${YEAR}</h2>
-    <table>
-      <thead><tr><th>Datum</th><th>Wat</th><th class="num">Bedrag</th><th class="num">Btw</th></tr></thead>
-      <tbody>
-        <tr><td>2 nov</td><td class="what">Factuur 2026-001, tien uur advies</td><td class="num">1.028,50</td><td class="num">178,50</td></tr>
-        <tr><td>3 nov</td><td class="what">Kantoorhandel</td><td class="num">−121,00</td><td class="num">−21,00</td></tr>
-        <tr><td>4 nov</td><td class="what">Software uit Ierland, btw verlegd</td><td class="num">−100,00</td><td class="num">0,00</td></tr>
-        <tr><td>5 nov</td><td class="what">Lunch met klant, privé betaald</td><td class="num">−54,50</td><td class="num">geen aftrek</td></tr>
-      </tbody>
-      <tfoot><tr><td colspan="3">Btw te betalen, vóór 31 januari</td><td class="num">€ 157</td></tr></tfoot>
-    </table>
-    <p class="said">“Hier is de bon van de lunch, die heb ik zelf voorgeschoten.” Meer hoef je niet te zeggen.</p>
-  </div>
-</section>
-
-<section class="band raised">
-  <div class="wrap">
-    <h2>Zo werkt het</h2>
-    <ol class="steps">
-      <li><h3>Koppel je assistent</h3><p>Bookiz is een MCP-server. Je voegt hem één keer toe aan Claude, Codex of een andere assistent die eigen MCP-servers toelaat, en logt in met je e-mailadres.</p></li>
-      <li><h3>Zeg wat er gebeurd is</h3><p>Stuur een foto van een bon of vraag om een factuur voor tien uur advies. Je assistent leest mee, Bookiz boekt en bewaart het bewijsstuk.</p></li>
-      <li><h3>Neem de cijfers over</h3><p>Elk kwartaal staan de bedragen per rubriek klaar, met de deadline erbij. Je typt ze over in Mijn Belastingdienst Zakelijk.</p></li>
-    </ol>
-  </div>
-</section>
-
-<section class="band">
-  <div class="wrap">
-    <h2>Gemaakt voor een kleine administratie</h2>
-    <p class="intro">Je hebt een eenmanszaak, misschien naast een baan. Je levert diensten, stuurt een paar facturen per maand of per jaar, en wilt er zo min mogelijk tijd aan kwijt zijn.</p>
-    <div class="split">
-      <div>
-        <h3>Wat Bookiz doet</h3>
-        <ul>
-          <li>Facturen met alle verplichte gegevens, als pdf en per e-mail</li>
-          <li>Bonnen en inkoopfacturen, ook als je privé hebt betaald</li>
-          <li>Btw-aangifte per rubriek, of de KOR zonder btw</li>
-          <li>Buitenlandse abonnementen waarbij de btw naar jou is verlegd</li>
-          <li>Investeringen met afschrijving, en kilometers met je eigen auto</li>
-          <li>Jaaroverzicht met je winst en wat je opzij moet zetten</li>
-          <li>Een volledige export, wanneer je maar wilt</li>
-        </ul>
-      </div>
-      <div class="not">
-        <h3>Wat Bookiz bewust niet doet</h3>
-        <ul>
-          <li>Bankkoppeling</li>
-          <li>Offertes en urenregistratie</li>
-          <li>Voorraad</li>
-          <li>Personeel en loon</li>
-          <li>Een eigen chatbot met AI-tegoed</li>
-          <li>Zelf indienen bij de Belastingdienst</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="band raised">
-  <div class="wrap">
-    <h2>De regels liggen op tafel</h2>
-    <p class="intro">Elk bedrag waarmee Bookiz rekent staat in een open bestand, met de pagina van de Belastingdienst waar het vandaan komt en de zin waarin het staat. Je boekhouder kan meelezen, en een fout is voor iedereen zichtbaar.</p>
-    <table class="rules">
-      <thead><tr><th scope="col">Regel</th><th scope="col">${YEAR}</th><th scope="col">Bron</th></tr></thead>
-      <tbody>
-${highlighted
-  .map((key) => {
-    const rule = rules.rules[key];
-    if (!rule) return '';
-    return `        <tr><th scope="row">${esc(rule.title)}</th><td class="value">${esc(ruleValue(key))}</td><td><a href="${esc(rule.source)}" rel="noopener">belastingdienst.nl</a></td></tr>`;
-  })
-  .join('\n')}
-      </tbody>
-    </table>
-    <p class="after-table"><a href="/belastingregels-${YEAR}/">Alle ${Object.keys(rules.rules).length} regels voor ${YEAR}, met het citaat uit de bron</a></p>
-  </div>
-</section>
-
-<section class="band" id="prijzen">
-  <div class="wrap">
-    <h2>Gratis als je zelf host. Betaald als je gemak wilt.</h2>
-    <div class="plans">
-      <div class="plan">
-        <h3>Zelf hosten</h3>
-        <p class="price">€ 0</p>
-        <p class="incl">Open source, voor altijd</p>
-        <p class="what">De hele boekhouding op je eigen computer of server.</p>
-        <ul>
-          <li>Alle functies, geen limiet op facturen</li>
-          <li>Eigen database, of geen database nodig</li>
-          <li>Bonnen in je eigen map of mailbox</li>
-        </ul>
-        ${repoButton}
-        <p class="small"></p>
-      </div>
-      <div class="plan featured">
-        <h3>Cloud${site.cloud.open ? '' : ' <span class="presale">binnenkort</span>'}</h3>
-        <p class="price">${euro(site.cloud.price_year_excl)} <small>per jaar</small></p>
-        <p class="incl">${euro(cloudIncl)} inclusief btw. Eerste dertig dagen gratis.</p>
-        <p class="what">Wij hosten het. Jij koppelt alleen je assistent.</p>
-        <ul>
-          <li>Inloggen vanuit je assistent, zonder wachtwoord of sleutel</li>
-          <li>Facturen versturen vanaf een betrouwbaar adres (tijdens de proef alleen naar jezelf)</li>
-          <li>Bonnen naar je eigen mailbox, geen opslag bij ons</li>
-        </ul>
-        ${site.cloud.open ? '<a class="button pay" href="/app">Probeer dertig dagen gratis</a>' : '<span class="button waiting">Opent binnenkort</span>'}
-        <p class="small">${site.cloud.open ? 'Geen betaalgegevens nodig om te beginnen. Daarna een jaarabonnement; binnen dertig dagen na betaling krijg je je geld terug als het niet bevalt.' : 'De techniek draait; we zetten de deur open zodra de laatste controles klaar zijn.'}</p>
-      </div>
-      <div class="plan">
-        <h3>Done for you <span class="presale">voorverkoop</span></h3>
-        <p class="price">${euro(site.dfy.founding_price_year_excl)} <small>per jaar</small></p>
-        <p class="incl">${euro(foundingIncl)} inclusief btw, voor de eerste ${site.dfy.founding_seats} klanten. Daarna ${euro(site.dfy.price_year_excl)}.</p>
-        <p class="what">Cloud, plus een boekhouder die je aangiftes doet.</p>
-        <ul>
-          <li>Vier btw-aangiftes per jaar</li>
-          <li>Je aangifte inkomstenbelasting</li>
-          <li>Alles van Cloud</li>
-        </ul>
-        ${payButton(site.dfy.stripe_link, 'Reserveer Done for you', 'Done for you')}
-        <p class="small">Nog niet beschikbaar. De aangiftes worden gedaan door een zelfstandige boekhouder. We starten zodra die samenwerking rond is; tot die dag krijg je je geld terug als je je bedenkt.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="band raised">
-  <div class="wrap">
-    <h2>Vragen</h2>
-    <div class="faq">
-${faq.map(([question, answer]) => `      <details><summary>${esc(question)}</summary><p>${esc(answer)}</p></details>`).join('\n')}
-    </div>
-  </div>
-</section>
-</main>`;
-
+  const body = landingBody({
+    esc,
+    euro,
+    repoUrl: site.repo_url,
+    contactEmail: site.contact_email,
+    cloud: { open: site.cloud.open, priceYear: site.cloud.price_year_excl, priceMonth: site.cloud.price_month_excl, trialDays: site.cloud.trial_days },
+    dfy: { price: site.dfy.price_year_excl, founding: site.dfy.founding_price_year_excl, seats: site.dfy.founding_seats },
+    rulesYear: YEAR,
+    zelfstandigenaftrek: rules.rules.zelfstandigenaftrek?.value ?? 0,
+    korLimit: rules.rules.kor_omzetgrens.value,
+  });
   return page({
     path: '/',
     title: 'Bookiz: boekhouden voor zzp’ers met weinig facturen',
     description:
-      'Open-source boekhouding voor eenmanszaken met weinig facturen. Facturen, bonnen en btw-aangifte regel je via je eigen AI-assistent. Gratis zelf te hosten.',
+      'Open-source boekhouding voor eenmanszaken met weinig facturen. Facturen, bonnen en btw-aangifte regel je in een chat met je eigen AI-assistent. Gratis zelf te hosten.',
     body,
+    data: landingData(),
     jsonLd: [
       {
         '@context': 'https://schema.org',
@@ -308,12 +167,15 @@ ${faq.map(([question, answer]) => `      <details><summary>${esc(question)}</sum
         operatingSystem: 'Any',
         inLanguage: 'nl',
         description: 'Open-source boekhouding voor Nederlandse eenmanszaken met weinig facturen, te bedienen via een AI-assistent met MCP.',
-        offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR', description: 'Zelf hosten' },
+        offers: [
+          { '@type': 'Offer', name: 'Self-host', price: '0', priceCurrency: 'EUR' },
+          { '@type': 'Offer', name: 'Cloud', price: String(site.cloud.price_year_excl), priceCurrency: 'EUR', description: 'Per jaar, exclusief btw' },
+        ],
       },
       {
         '@context': 'https://schema.org',
         '@type': 'FAQPage',
-        mainEntity: faq.map(([question, answer]) => ({
+        mainEntity: landingFaq.map(([question, answer]) => ({
           '@type': 'Question',
           name: question,
           acceptedAnswer: { '@type': 'Answer', text: answer },
@@ -339,7 +201,7 @@ function rulesPage(): string {
     path: `/belastingregels-${YEAR}/`,
     title: `Belastingregels ${YEAR} voor eenmanszaken, met bron | Bookiz`,
     description: `De bedragen en percentages van ${YEAR} voor zzp’ers en eenmanszaken: KOR-grens, zelfstandigenaftrek, MKB-winstvrijstelling, KIA en meer, elk met het citaat van de Belastingdienst.`,
-    body: `<main class="wrap doc">
+    body: `<main class="doc">
   <h1>Belastingregels ${YEAR} voor eenmanszaken</h1>
   <p class="lead">Dit zijn de ${Object.keys(rules.rules).length} regels waarmee Bookiz voor ${YEAR} rekent. Bij elke regel staat de zin van de Belastingdienst waar het bedrag uit komt. Voor het laatst met de bron vergeleken op ${dutchDate(rules.checked_on)}.</p>
   <table class="rules">
@@ -348,7 +210,7 @@ function rulesPage(): string {
 ${rows}
     </tbody>
   </table>
-  <p class="after-table">Dezelfde regels staan als bestand in de repository onder <code>rules/nl-${YEAR}.json</code>. Zie je een fout, meld het daar.</p>
+  <p class="after">Dezelfde regels staan als bestand in de repository onder <code>rules/nl-${YEAR}.json</code>. Zie je een fout, meld het daar.</p>
 </main>`,
   });
 }
@@ -358,11 +220,11 @@ function legalPage(path: string, title: string, description: string, lead: strin
     path,
     title: `${title} | Bookiz`,
     description,
-    body: `<main class="wrap doc prose">
+    body: `<main class="doc prose">
   <h1>${title}</h1>
   <p class="lead">${lead}</p>
 ${html}
-  <p class="note">Versie van ${dutchDate(new Date().toISOString().slice(0, 10))}.</p>
+  <p class="note-line">Versie van ${dutchDate(new Date().toISOString().slice(0, 10))}.</p>
 </main>`,
   });
 }
@@ -388,13 +250,13 @@ const extraPages: Record<string, string> = {
       title: 'Overstappen van boekhoudprogramma per 1 januari | Bookiz',
       description:
         'Overstappen van boekhoudpakket als zzp’er: waarom 1 januari het beste moment is, wat je meeneemt, wat je bewaart en hoe het in vijf stappen gaat. Ook vanuit Moneybird.',
-      body: `<main class="wrap doc prose">
+      body: `<main class="doc prose">
   <h1>Overstappen van boekhoudprogramma per 1 januari</h1>
   <p class="lead">Voor zzp’ers en eenmanszaken met een kleine administratie. Wat neem je mee, wat laat je achter, en in welke volgorde.</p>
 ${switchBody(facts)}
   <h2>Veelgestelde vragen</h2>
 ${faqs.map(([question, answer]) => `  <h3>${esc(question)}</h3>\n  <p>${esc(answer)}</p>`).join('\n')}
-  <p class="note"><a href="/#prijzen">Bekijk wat Bookiz kost</a>${site.repo_url ? ` of <a href="${esc(site.repo_url)}">host het zelf, gratis</a>` : ''}.</p>
+  <p class="note-line"><a href="/#prijzen">Bekijk wat Bookiz kost</a>${site.repo_url ? ` of <a href="${esc(site.repo_url)}">host het zelf, gratis</a>` : ''}.</p>
 </main>`,
       jsonLd: [
         {
@@ -440,7 +302,17 @@ for (const [slug, html] of Object.entries(extraPages)) {
   mkdirSync(join(dist, slug), { recursive: true });
   writeFileSync(join(dist, slug, 'index.html'), html);
 }
-for (const file of ['site.css', 'logo.png', 'favicon.png']) copyFileSync(join(here, 'assets', file), join(dist, file));
+for (const file of ['site.css', 'site.js', 'logo.png', 'favicon.png', 'founder.jpg', 'founder-sm.jpg']) {
+  copyFileSync(join(here, 'assets', file), join(dist, file));
+}
+mkdirSync(join(dist, 'logos'), { recursive: true });
+for (const file of readdirSync(join(here, 'assets', 'logos'))) copyFileSync(join(here, 'assets', 'logos', file), join(dist, 'logos', file));
+for (const [name, file] of [
+  ['geist', 'geist/files/geist-latin-wght-normal.woff2'],
+  ['geist-mono', 'geist-mono/files/geist-mono-latin-wght-normal.woff2'],
+]) {
+  copyFileSync(join(root, 'node_modules/@fontsource-variable', file as string), join(dist, 'fonts', `${name}.woff2`));
+}
 copyFileSync(
   join(root, 'node_modules/@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2'),
   join(dist, 'fonts', 'bricolage-grotesque.woff2'),

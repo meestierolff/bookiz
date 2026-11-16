@@ -4,12 +4,22 @@
  * and where. Change these together with the product, not after it.
  */
 export type Company = {
+  /** Trade name the customer sees. */
   name: string;
+  /** The business behind it, as registered with the KvK. */
+  legal_name: string;
+  legal_form: string;
   email: string;
   kvk: string;
   vat_id: string;
   address: string;
 };
+
+/** "Bookiz, een handelsnaam van Top of the World (eenmanszaak)". */
+export function who(company: Company): string {
+  if (!company.legal_name || company.legal_name === company.name) return company.name;
+  return `${company.name}, een handelsnaam van ${company.legal_name}${company.legal_form ? ` (${company.legal_form})` : ''}`;
+}
 
 type Section = { title: string; body: string[] };
 
@@ -18,7 +28,7 @@ const list = (items: string[]) => `<ul>${items.map((item) => `<li>${item}</li>`)
 
 function identity(company: Company): string {
   const lines = [
-    company.name,
+    who(company),
     company.address,
     company.kvk && `KvK-nummer ${company.kvk}`,
     company.vat_id && `Btw-identificatienummer ${company.vat_id}`,

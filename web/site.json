@@ -4,6 +4,8 @@
   "contact_email": "hallo@boekiehouder.nl",
   "cloud": {
     "price_year_excl": 99,
+    "price_month_excl": 12,
+    "trial_days": 30,
     "stripe_link": "",
     "open": false
   },
@@ -15,8 +17,10 @@
   },
   "company": {
     "name": "Bookiz",
-    "kvk": "",
+    "legal_name": "Top of the World",
+    "legal_form": "eenmanszaak",
+    "kvk": "92357989",
     "vat_id": "",
-    "address": ""
+    "address": "Kraaipanstraat 11 B, 1091 PE Amsterdam"
   }
 }
