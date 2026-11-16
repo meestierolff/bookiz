@@ -37,7 +37,7 @@ export function createServer(ctx: Ctx): McpServer {
 
   function tool<S extends Shape>(
     name: string,
-    config: { title: string; description: string; input: S; readOnly?: boolean; meta?: Record<string, unknown> },
+    config: { title: string; description: string; input: S; readOnly?: boolean; irreversible?: boolean; outbound?: boolean; meta?: Record<string, unknown> },
     run: (args: z.infer<z.ZodObject<S>>) => Promise<unknown> | unknown,
   ): void {
     server.registerTool(
@@ -46,12 +46,18 @@ export function createServer(ctx: Ctx): McpServer {
         title: config.title,
         description: config.description,
         inputSchema: config.input,
-        annotations: { readOnlyHint: Boolean(config.readOnly), destructiveHint: false, openWorldHint: false },
+        // Honest hints let a client ask the owner before a step that cannot be taken back or leaves the system.
+        annotations: {
+          readOnlyHint: Boolean(config.readOnly),
+          destructiveHint: Boolean(config.irreversible),
+          openWorldHint: Boolean(config.outbound),
+        },
         ...(config.meta ? { _meta: config.meta } : {}),
       },
       (async (args: z.infer<z.ZodObject<S>>) => {
         let outcome = 'ok';
         try {
+          if (ctx.locked && !config.readOnly) throw new BookizError(ctx.locked);
           const result = await run(args);
           return { content: [{ type: 'text' as const, text: JSON.stringify(inEuros(result), null, 2) }] };
         } catch (error) {
@@ -210,6 +216,7 @@ export function createServer(ctx: Ctx): McpServer {
       title: 'Factuur definitief maken',
       description:
         'Turn a draft into a final invoice: it gets the next consecutive number, a PDF, and counts for btw and profit. This cannot be undone, only reversed with credit_invoice. Only call after the owner approved the draft.',
+      irreversible: true,
       input: { draft_id: z.number().int() },
     },
     ({ draft_id }) => invoices.finalizeInvoice(ctx, draft_id),
@@ -221,6 +228,7 @@ export function createServer(ctx: Ctx): McpServer {
       title: 'Factuur versturen',
       description:
         'E-mail a final invoice as PDF to the customer, with a copy to the owner. Needs SMTP on the server. Ask the owner before sending; this leaves the building.',
+      outbound: true,
       input: {
         number: z.string().describe('Invoice number, e.g. 2026-001'),
         to: z.email().optional().describe('Overrides the customer e-mail address'),
@@ -246,6 +254,7 @@ export function createServer(ctx: Ctx): McpServer {
       title: 'Factuur crediteren',
       description:
         'Reverse a final invoice with a creditfactuur dated today. Use this for any mistake on a final invoice, then create a correct new one.',
+      irreversible: true,
       input: { number: z.string(), reason: z.string().max(500).optional() },
     },
     (args) => invoices.creditInvoice(ctx, args),
@@ -307,6 +316,7 @@ Refuses a likely duplicate unless allow_duplicate is true. Afterwards, store the
       title: 'Bewijsstuk bewaren',
       description:
         'Store the original receipt or purchase invoice of an expense (JPG, PNG, WEBP, HEIC or PDF, max 10 MB). Pass exactly one source: file when the app hands you an uploaded file object, file_path when Bookiz runs on the same computer as you, url for an https download link, or content_base64. The file is e-mailed to the owner’s archive mailbox or written to the data folder; the database keeps only a SHA-256 hash. If you cannot pass the file, give the owner the upload link from record_expense.',
+      irreversible: true, outbound: true,
       input: {
         ref: z.string().describe('Expense reference, e.g. K2026-001'),
         file: z
@@ -332,6 +342,7 @@ Refuses a likely duplicate unless allow_duplicate is true. Afterwards, store the
     {
       title: 'Uitgave laten vervallen',
       description: 'Cancel an expense that was booked by mistake. It stays visible with the reason. Not possible once its btw period has been filed.',
+      irreversible: true,
       input: { ref: z.string(), reason: z.string().trim().min(3).max(300) },
     },
     (args) => expenses.voidExpense(ctx, args),
@@ -366,6 +377,7 @@ Refuses a likely duplicate unless allow_duplicate is true. Afterwards, store the
       title: 'Btw-aangifte afsluiten',
       description:
         'Record that the owner filed the btw-aangifte for a period. This freezes the figures and locks the period. Only call after the owner confirms the filing was actually submitted.',
+      irreversible: true,
       input: { period: z.string(), filed_on: date.optional() },
     },
     (args) => reports.markVatReturnFiled(ctx, args),

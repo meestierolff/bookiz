@@ -9,7 +9,6 @@ import type { Mailer } from './mail.ts';
 import { formatEur } from './core/money.ts';
 import type { Business, Expense, Receipt } from './core/types.ts';
 
-export const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
 
 const TYPES: { ext: string; mime: string; test: (b: Buffer) => boolean }[] = [
   { ext: 'jpg', mime: 'image/jpeg', test: (b) => b[0] === 0xff && b[1] === 0xd8 },
@@ -50,10 +49,10 @@ export async function loadReceiptBytes(source: ReceiptSource, config: Config): P
   } else if (source.content_base64) {
     bytes = Buffer.from(source.content_base64.replace(/^data:[^,]*,/, ''), 'base64');
   } else {
-    bytes = await download(source.url as string);
+    bytes = await download(source.url as string, config);
   }
   if (bytes.length === 0) throw new BookizError('Het bestand is leeg.');
-  if (bytes.length > MAX_RECEIPT_BYTES) throw new BookizError('Het bestand is groter dan 10 MB.');
+  if (bytes.length > config.maxReceiptBytes) throw new BookizError(tooLarge(config));
   return bytes;
 }
 
@@ -85,6 +84,10 @@ for (const [network, prefix] of [
   NOT_PUBLIC.addSubnet(network, prefix, 'ipv6');
 }
 
+export function tooLarge(config: Config): string {
+  return `Het bestand is groter dan ${Math.floor(config.maxReceiptBytes / (1024 * 1024))} MB.`;
+}
+
 function isPrivateAddress(address: string): boolean {
   const family = isIP(address);
   return family === 0 || NOT_PUBLIC.check(address, family === 6 ? 'ipv6' : 'ipv4');
@@ -97,7 +100,7 @@ function isPrivateAddress(address: string): boolean {
  * aim one blind request at an internal address; the certificate check and the
  * file-type sniffing limit what that can achieve.
  */
-async function download(rawUrl: string): Promise<Buffer> {
+async function download(rawUrl: string, config: Config): Promise<Buffer> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -115,7 +118,7 @@ async function download(rawUrl: string): Promise<Buffer> {
   let size = 0;
   for await (const chunk of response.body ?? []) {
     size += chunk.length;
-    if (size > MAX_RECEIPT_BYTES) throw new BookizError('Het bestand is groter dan 10 MB.');
+    if (size > config.maxReceiptBytes) throw new BookizError(tooLarge(config));
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
@@ -138,7 +141,7 @@ export async function archiveReceipt(
   const base = { sha256, filename, bytes: bytes.length, archived_at: new Date().toISOString() };
 
   if (deps.config.receiptArchive === 'email') {
-    const to = business.archive_email ?? business.email;
+    const to = business.archive_email ?? business.email ?? deps.config.fallbackArchiveEmail;
     if (!to) {
       throw new BookizError(
         'Er is geen e-mailadres om bonnen naar te sturen.',
@@ -198,12 +201,23 @@ export function verifySignature(config: Config, subject: string, signature: stri
   return Boolean(config.token) && expected.length === given.length && timingSafeEqual(expected, given);
 }
 
+type LinkKind = 'bon' | 'factuur';
+
+/** The signed subject carries the scope, so a link for one administration is worthless in another. */
+function linkSubject(config: Config, kind: LinkKind, id: string): string {
+  return `${config.linkScope}:${kind}:${id}`;
+}
+
+export function verifyLink(config: Config, kind: LinkKind, id: string, signature: string): boolean {
+  return verifySignature(config, linkSubject(config, kind, id), signature);
+}
+
 export function uploadLink(config: Config, expenseRef: string): string | null {
   if (config.mode !== 'http' || !config.publicUrl) return null;
-  return `${config.publicUrl}/bon/${expenseRef}/${sign(config, `bon:${expenseRef}`)}`;
+  return `${config.publicUrl}${config.linkScope}/bon/${expenseRef}/${sign(config, linkSubject(config, 'bon', expenseRef))}`;
 }
 
 export function invoiceLink(config: Config, number: string): string | null {
   if (config.mode !== 'http' || !config.publicUrl) return null;
-  return `${config.publicUrl}/factuur/${number}/${sign(config, `factuur:${number}`)}.pdf`;
+  return `${config.publicUrl}${config.linkScope}/factuur/${number}/${sign(config, linkSubject(config, 'factuur', number))}.pdf`;
 }

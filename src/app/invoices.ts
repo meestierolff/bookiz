@@ -265,6 +265,17 @@ export async function sendInvoice(ctx: Ctx, input: { number: string; to?: string
       'Geef "to" mee of sla het adres op met save_contact.',
     );
   }
+  if (ctx.config.dailyMailLimit !== undefined) {
+    const sent = await ctx.db.query<{ n: number }>(
+      "select count(*)::int as n from audit_log where tool = 'send_invoice' and outcome = 'ok' and at > now() - interval '1 day'",
+    );
+    if ((sent[0]?.n ?? 0) >= ctx.config.dailyMailLimit) {
+      throw new BookizError(
+        `Je hebt vandaag al ${ctx.config.dailyMailLimit} facturen verstuurd; meer kan pas morgen.`,
+        'De pdf kun je altijd zelf downloaden en versturen.',
+      );
+    }
+  }
   const isCredit = invoice.total_cents < 0;
   const text =
     input.message ??

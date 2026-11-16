@@ -1,0 +1,23 @@
+# Supabase project settings for Bookiz Cloud, pushed with `supabase config push`.
+# Supabase provides the Postgres database, user accounts and the OAuth server
+# that AI assistants sign in through. Bookiz itself runs on Vercel.
+project_id = "essdjjsrlglcglehgdme"
+
+[auth]
+site_url = "https://boekiehouder.nl"
+additional_redirect_urls = ["https://boekiehouder.nl/app"]
+jwt_expiry = 3600
+enable_signup = true
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = true
+# Sign-in is by one-time code that Bookiz mails itself; Supabase sends no mail.
+enable_confirmations = false
+otp_length = 6
+otp_expiry = 900
+
+[auth.oauth_server]
+enabled = true
+authorization_url_path = "/oauth/consent"
+allow_dynamic_registration = true

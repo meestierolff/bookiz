@@ -5,7 +5,7 @@
   "outputDirectory": "web/dist",
   "headers": [
     {
-      "source": "/((?!mcp|app|api|bon|factuur|oauth|\\.well-known).*)",
+      "source": "/((?!(?:mcp|app|api|bon|factuur|oauth|k|\\.well-known)(?:/|$)).*)",
       "headers": [
         {
           "key": "X-Content-Type-Options",

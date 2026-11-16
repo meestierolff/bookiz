@@ -16,7 +16,16 @@ export type Config = {
   smtpUrl: string | undefined;
   mailFrom: string | undefined;
   receiptArchive: 'email' | 'folder';
+  /** Path prefix that ties signed links to one administration; empty when there is only one. */
+  linkScope: string;
+  maxReceiptBytes: number;
+  /** Where receipts go when the business profile names no address (the account's own e-mail in Cloud). */
+  fallbackArchiveEmail: string | undefined;
+  /** Upper bound on invoices mailed per day, to keep a shared sending domain clean. */
+  dailyMailLimit: number | undefined;
 };
+
+export const DEFAULT_MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
 
 export function loadConfig(mode: Mode, env: NodeJS.ProcessEnv = process.env): Config {
   const dataDir = env.BOOKIZ_DATA_DIR ?? join(homedir(), '.bookiz');
@@ -53,5 +62,9 @@ export function loadConfig(mode: Mode, env: NodeJS.ProcessEnv = process.env): Co
     smtpUrl,
     mailFrom: env.MAIL_FROM || undefined,
     receiptArchive: (requested as 'email' | 'folder' | undefined) ?? (smtpUrl ? 'email' : 'folder'),
+    linkScope: '',
+    maxReceiptBytes: DEFAULT_MAX_RECEIPT_BYTES,
+    fallbackArchiveEmail: undefined,
+    dailyMailLimit: undefined,
   };
 }
