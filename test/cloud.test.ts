@@ -9,7 +9,7 @@ import * as reports from '../src/app/reports.ts';
 import type { CloudEnv } from '../src/cloud/env.ts';
 import { type Cloud, checkoutUrl, handle, verifyStripeSignature } from '../src/cloud/handler.ts';
 import type { Mail } from '../src/mail.ts';
-import { type Account, accessOf, type Connector, ensureAccount, findAccount, tenantSchema, withTenant } from '../src/cloud/tenants.ts';
+import { type Account, accessOf, type Connector, ensureAccount, findAccount, isAdmin, tenantConfig, tenantSchema, withTenant } from '../src/cloud/tenants.ts';
 import { type Db, openEmbedded, SCHEMA_VERSION } from '../src/db.ts';
 import { invoiceLink, verifyLink } from '../src/receipts.ts';
 import * as store from '../src/store.ts';
@@ -29,6 +29,7 @@ const env: CloudEnv = {
   stripeDfyPaymentLink: 'https://buy.stripe.test/dfy',
   stripeDfyPaymentLinkId: 'plink_dfy',
   operatorEmail: 'ops@bookiz.test',
+  adminEmails: [],
   operatorToken: 'operator-token-for-tests-0123456789',
   trialDays: 30,
 };
@@ -334,4 +335,20 @@ test('Done For You is paid through its own link after sign-in, the operator hear
     server.close();
     server.closeAllConnections();
   }
+});
+
+test('the operator accounts always have access, and an empty list grants nobody anything', async () => {
+  const { cloud, raw, setNow } = await embeddedCloud();
+  await raw.exec((await import('../src/cloud/tenants.ts')).CONTROL_SCHEMA);
+  const account = await ensureAccount(cloud.connect, env, alice);
+  setNow('2028-01-01T00:00:00Z');
+  assert.equal(accessOf(account, env, cloud.now()).allowed, false, 'an expired trial is closed');
+  assert.equal(isAdmin(env, account), false, 'no list, no admins');
+
+  const admins = { ...env, adminEmails: ['ALICE@example.test'.toLowerCase()] };
+  assert.equal(isAdmin(admins, { ...account, email: ' Alice@Example.test ' }), true, 'matched on the normalised address');
+  assert.equal(accessOf(account, admins, cloud.now()).allowed, true);
+  assert.equal(tenantConfig(admins, account).mailOnlyTo, undefined, 'an admin can mail customers, also on a trial');
+  assert.equal(tenantConfig(env, account).mailOnlyTo, account.email);
+  assert.equal(isAdmin(admins, { ...account, email: 'bob@example.test' }), false);
 });

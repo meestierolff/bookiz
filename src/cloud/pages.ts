@@ -91,6 +91,8 @@ export function dashboardPage(
   options: {
     account: Account;
     access: boolean;
+    /** One of the operator's own accounts: always open. */
+    admin?: boolean;
     mcpUrl: string;
     /** Which plans this account can buy now; false while a subscription is running. */
     checkout: { cloud: boolean; dfy: boolean };
@@ -104,7 +106,9 @@ export function dashboardPage(
   const paid = account.status !== 'trial' && account.paid_until !== null && options.access;
   const planName = account.plan === 'dfy' ? 'Done For You' : 'Abonnement';
   const until = account.paid_until ? esc(day(account.paid_until)) : '';
-  const chip = paid
+  const chip = options.admin
+    ? '<span class="status-chip">Beheerder: altijd toegang</span>'
+    : paid
     ? account.status === 'cancelled'
       ? `<span class="status-chip">Opgezegd: je kunt Bookiz gebruiken tot ${until}</span>`
       : `<span class="status-chip">${planName} loopt tot ${until}</span>`

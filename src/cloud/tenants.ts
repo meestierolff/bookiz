@@ -124,7 +124,13 @@ export async function ensureAccount(connect: Connector, env: CloudEnv, user: { i
 
 export type Access = { allowed: true } | { allowed: false; reason: string };
 
+/** The operator's own accounts: always open, never billed. Matched on the verified sign-in address. */
+export function isAdmin(env: CloudEnv, account: Account): boolean {
+  return env.adminEmails.length > 0 && env.adminEmails.includes(account.email.trim().toLowerCase());
+}
+
 export function accessOf(account: Account, env: CloudEnv, now: Date): Access {
+  if (isAdmin(env, account)) return { allowed: true };
   const paid = account.paid_until !== null && new Date(account.paid_until) > now;
   // A cancelled subscription still runs to the end of the year that was paid for, as the terms promise.
   if (account.status !== 'trial' && paid) return { allowed: true };
@@ -157,7 +163,7 @@ export function tenantConfig(env: CloudEnv, account: Account): Config {
     dailyMailLimit: 25,
     // A free trial needs no card, so it must not be a way to mail strangers from our domain.
     // Once paid, also after cancelling, invoices go to customers; the access check stops everything when the paid period ends.
-    mailOnlyTo: account.status === 'trial' ? account.email : undefined,
+    mailOnlyTo: account.status === 'trial' && !isAdmin(env, account) ? account.email : undefined,
     // A receipt carries an attachment the customer supplies. It goes to the address they proved is theirs, nowhere else.
     receiptsOnlyTo: account.email,
     dailyReceiptLimit: 100,
