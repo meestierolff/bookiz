@@ -31,6 +31,7 @@ const env: CloudEnv = {
   operatorEmail: 'ops@bookiz.test',
   adminEmails: [],
   operatorToken: 'operator-token-for-tests-0123456789',
+  cronSecret: undefined,
   trialDays: 30,
 };
 
@@ -351,4 +352,26 @@ test('the operator accounts always have access, and an empty list grants nobody 
   assert.equal(tenantConfig(admins, account).mailOnlyTo, undefined, 'an admin can mail customers, also on a trial');
   assert.equal(tenantConfig(env, account).mailOnlyTo, account.email);
   assert.equal(isAdmin(admins, { ...account, email: 'bob@example.test' }), false);
+});
+
+test('the daily keep-alive answers only to Vercel Cron and touches the database', async () => {
+  const { cloud, raw } = await embeddedCloud();
+  await raw.exec((await import('../src/cloud/tenants.ts')).CONTROL_SCHEMA);
+  const serve = (c: Cloud) => createServer((req, res) => void handle(c, req, res)).listen(0);
+  const off = serve(cloud);
+  const on = serve({ ...cloud, env: { ...env, cronSecret: 'cron-secret-for-tests-0123456789' } });
+  const at = (server: ReturnType<typeof serve>) => `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/cron/keepalive`;
+  try {
+    assert.equal((await fetch(at(off))).status, 404, 'without a secret there is no endpoint');
+    assert.equal((await fetch(at(on))).status, 401);
+    assert.equal((await fetch(at(on), { headers: { authorization: 'Bearer wrong' } })).status, 401);
+    const ok = await fetch(at(on), { headers: { authorization: 'Bearer cron-secret-for-tests-0123456789' } });
+    assert.equal(ok.status, 200);
+    assert.deepEqual(await ok.json(), { ok: true });
+  } finally {
+    for (const server of [off, on]) {
+      server.close();
+      server.closeAllConnections();
+    }
+  }
 });

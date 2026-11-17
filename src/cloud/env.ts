@@ -24,6 +24,8 @@ export type CloudEnv = {
   operatorEmail: string | undefined;
   /** Accounts that always have full access, without a trial or subscription: the operator's own. Lower case. */
   adminEmails: string[];
+  /** Vercel sends it with its scheduled calls; without it the daily keep-alive does not exist. */
+  cronSecret: string | undefined;
   /** Lets the operator ask the health check how the deployment is configured. */
   operatorToken: string | undefined;
   trialDays: number;
@@ -62,6 +64,7 @@ export function loadCloudEnv(env: NodeJS.ProcessEnv = process.env): CloudEnv {
       .map((email) => email.trim().toLowerCase())
       .filter((email) => email.includes('@')),
     operatorToken: env.OPERATOR_TOKEN?.trim() || undefined,
+    cronSecret: env.CRON_SECRET?.trim() || undefined,
     trialDays: 30,
   };
 }
