@@ -26,9 +26,10 @@ async function loadBooks(q: Queryable) {
 function checkPeriod(period: string, business: Business): { from: string; to: string } {
   const bounds = periodBounds(period);
   if (bounds.kind !== business.vat_period) {
-    const example = business.vat_period === 'quarter' ? '2026-Q4' : '2026-11';
+    const example = { quarter: '2026-Q4', month: '2026-11', year: '2026' }[business.vat_period];
+    const how = { quarter: 'per kwartaal', month: 'per maand', year: 'per jaar' }[business.vat_period];
     throw new BookizError(
-      `Je doet ${business.vat_period === 'quarter' ? 'per kwartaal' : 'per maand'} aangifte; "${period}" is geen tijdvak van jou.`,
+      `Je doet ${how} aangifte; "${period}" is geen tijdvak van jou.`,
       `Gebruik een tijdvak zoals ${example}.`,
     );
   }

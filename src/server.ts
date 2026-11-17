@@ -137,7 +137,10 @@ export function createServer(ctx: Ctx): McpServer {
         archive_email: z.email().optional().describe('Mailbox that receives receipts as its archive; defaults to email'),
         kor_since: date.nullable().optional(),
         kor_until: date.nullable().optional(),
-        vat_period: z.enum(['month', 'quarter']).optional().describe('How often the Belastingdienst wants a btw-aangifte; quarter is the default'),
+        vat_period: z
+          .enum(['month', 'quarter', 'year'])
+          .optional()
+          .describe('How often the Belastingdienst wants a btw-aangifte: quarter (the default), month, or year when the Belastingdienst approved a yearly return. Set it before booking anything; it cannot change afterwards.'),
         payment_term_days: z.number().int().min(0).max(365).optional(),
       },
     },
@@ -482,7 +485,7 @@ Refuses a likely duplicate unless allow_duplicate is true. Afterwards, store the
     {
       title: 'Btw-aangifte',
       description:
-        'The btw-aangifte for a period (2026-Q4 or 2026-11), per rubriek in whole euros exactly as the form of Mijn Belastingdienst Zakelijk asks, with the documents behind every number, the ICP list and the deadline. Without a period it picks the oldest one that still has to be filed. The owner copies the figures into the form; Bookiz does not submit.',
+        'The btw-aangifte for a period (2026-Q4, 2026-11, or 2026 for a yearly filer), per rubriek in whole euros exactly as the form of Mijn Belastingdienst Zakelijk asks, with the documents behind every number, the ICP list and the deadline. Without a period it picks the oldest one that still has to be filed. The owner copies the figures into the form; Bookiz does not submit.',
       input: { period: z.string().optional() },
       readOnly: true,
     },

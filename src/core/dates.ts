@@ -2,7 +2,7 @@ import { BookizError } from '../errors.ts';
 
 /** Calendar dates are 'YYYY-MM-DD' strings everywhere; they compare and sort as text. */
 export type IsoDate = string;
-export type VatPeriodKind = 'month' | 'quarter';
+export type VatPeriodKind = 'month' | 'quarter' | 'year';
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -48,9 +48,10 @@ function lastDayOfMonth(year: number, month: number): IsoDate {
   return fromUtc(new Date(Date.UTC(year, month, 0)));
 }
 
-/** '2026-Q4' or '2026-11', depending on how often the business files. */
+/** '2026-Q4', '2026-11' or '2026', depending on how often the business files. */
 export function periodFor(date: IsoDate, kind: VatPeriodKind): string {
   const year = yearOf(date);
+  if (kind === 'year') return String(year);
   if (kind === 'month') return date.slice(0, 7);
   return `${year}-Q${Math.ceil(monthOf(date) / 3)}`;
 }
@@ -67,7 +68,8 @@ export function periodBounds(period: string): { from: IsoDate; to: IsoDate; kind
     const year = Number(month[1]);
     return { from: `${period}-01`, to: lastDayOfMonth(year, Number(month[2])), kind: 'month' };
   }
-  throw new BookizError(`Onbekend tijdvak "${period}".`, 'Gebruik 2026-Q4 (kwartaal) of 2026-11 (maand).');
+  if (/^\d{4}$/.test(period)) return { from: `${period}-01-01`, to: `${period}-12-31`, kind: 'year' };
+  throw new BookizError(`Onbekend tijdvak "${period}".`, 'Gebruik 2026-Q4 (kwartaal), 2026-11 (maand) of 2026 (jaar).');
 }
 
 export function inRange(date: IsoDate, from: IsoDate, to: IsoDate): boolean {

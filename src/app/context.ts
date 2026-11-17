@@ -32,9 +32,14 @@ export function openPeriodFor(date: IsoDate, business: Business, filings: VatFil
   return period;
 }
 
-/** Filing and payment are both due on the last day of the month after the period. */
+/**
+ * Filing and payment are both due on the last day of the month after the
+ * period; for a yearly return on 31 March of the next year (belastingdienst.nl,
+ * uiterste aangifte- en betaaldatums).
+ */
 export function vatDeadline(period: string): IsoDate {
-  const { to } = periodBounds(period);
+  const { to, kind } = periodBounds(period);
+  if (kind === 'year') return `${Number(period) + 1}-03-31`;
   const firstOfNext = addDays(to, 1);
   const { to: lastOfNext } = periodBounds(firstOfNext.slice(0, 7));
   return lastOfNext;

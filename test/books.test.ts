@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { setupBusiness } from '../src/app/business.ts';
 import { vatDeadline } from '../src/app/context.ts';
 import * as expenses from '../src/app/expenses.ts';
 import * as invoices from '../src/app/invoices.ts';
@@ -309,4 +310,33 @@ test('a filed return keeps its figures, and January works before the new rules e
   const frozen = await reports.vatReturn(ctx, { period: '2026-Q4' });
   assert.equal(frozen.totaal_te_betalen, 210);
   assert.equal(frozen.status, 'aangegeven op 2027-01-05');
+});
+
+test('a yearly btw filer: one return for the whole year, due 31 March, with earlier invoices re-entered in order', async () => {
+  const ctx = await makeCtx();
+  const customer = await seed(ctx);
+  await setupBusiness(ctx, { vat_period: 'year' });
+
+  // Invoices already sent this year go in as drafts first and become final in their original order.
+  const march = await invoices.createInvoice(ctx, { contact_id: customer, lines: [{ description: 'Training maart', quantity: 1, unit_price: 500 }], issue_date: '2026-03-10' });
+  const january = await invoices.createInvoice(ctx, { contact_id: customer, lines: [{ description: 'Training januari', quantity: 1, unit_price: 300 }], issue_date: '2026-01-15' });
+  assert.equal((await invoices.finalizeInvoice(ctx, january.draft_id)).number, '2026-001');
+  assert.equal((await invoices.finalizeInvoice(ctx, march.draft_id)).number, '2026-002');
+  const office = await expenses.recordExpense(ctx, { date: '2026-06-01', vendor: 'Kantoorhandel', amount: 121, vat_amount: 21, category: 'kantoor' });
+  assert.equal(office.vat_period, '2026');
+
+  const btw = await reports.vatReturn(ctx, { period: '2026' });
+  assert.deepEqual(btw.rubrieken['1a'].documents, ['2026-001', '2026-002']);
+  assert.equal(btw['5a_verschuldigde_btw'], 168);
+  assert.equal(btw['5b_voorbelasting'], 21);
+  assert.equal(btw.deadline_aangifte_en_betaling, '2027-03-31');
+  assert.equal(vatDeadline('2026'), '2027-03-31');
+  await assert.rejects(reports.vatReturn(ctx, { period: '2026-Q4' }), /per jaar/);
+  await assert.rejects(reports.markVatReturnFiled(ctx, { period: '2026' }), /nog niet afgelopen/);
+  await assert.rejects(setupBusiness(ctx, { vat_period: 'quarter' }), /kan niet meer wijzigen/);
+
+  ctx.setNow('2027-02-10T10:00:00Z');
+  await reports.markVatReturnFiled(ctx, { period: '2026', filed_on: '2027-02-10' });
+  const late = await invoices.createInvoice(ctx, { contact_id: customer, lines: [{ description: 'Vergeten', quantity: 1, unit_price: 100 }], issue_date: '2026-12-20' });
+  await assert.rejects(invoices.finalizeInvoice(ctx, late.draft_id), /al is gedaan/);
 });

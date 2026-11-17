@@ -173,7 +173,7 @@ ${f.dfy ? `      <tr><th scope="row">Done For You</th><td class="value">${f.dfy.
   <ul>
     <li>Facturen met alle verplichte gegevens, opeenvolgende nummers, pdf en e-mail.</li>
     <li>Bonnen en inkoopfacturen, ook als je privé betaalde.</li>
-    <li>Btw-aangifte per rubriek in hele euro’s, met de documenten achter elk getal.</li>
+    <li>Btw-aangifte per rubriek in hele euro’s, met de documenten achter elk getal. Per kwartaal, per maand of, als de Belastingdienst dat heeft toegestaan, één keer per jaar.</li>
     <li>De kleineondernemersregeling: facturen zonder btw en je omzet tegen de grens.</li>
     <li>Een jaaroverzicht met winst, ondernemersaftrek, MKB-winstvrijstelling en wat je opzij zet voor inkomstenbelasting en Zvw.</li>
     <li>Periodieke facturen, overstappen vanuit een ander pakket, en export van een heel jaar als één bestand.</li>
