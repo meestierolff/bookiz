@@ -16,7 +16,8 @@
     "rules:check": "node scripts/check-rules.ts",
     "web:build": "node web/build.ts",
     "verify": "npm run typecheck && npm run rules:check && npm test && npm run web:build && npm run site:check",
-    "site:check": "node scripts/check-site.ts"
+    "site:check": "node scripts/check-site.ts",
+    "seo:indexnow": "node scripts/indexnow.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.16",

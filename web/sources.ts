@@ -35,6 +35,14 @@ export const SOURCES = {
     url: 'https://www.moneybird.nl/agents/',
     label: 'Moneybird voor agents (MCP-koppeling)',
   },
+  claudeConnectors: {
+    url: 'https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp',
+    label: 'Claude: eigen connectors (remote MCP) per abonnement',
+  },
+  chatgptMcp: {
+    url: 'https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt',
+    label: 'OpenAI: eigen MCP-servers koppelen in ChatGPT',
+  },
 } as const;
 
 /** The deadlines as the Belastingdienst states them; the year follows from the period. */

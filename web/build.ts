@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { type RuleKey, type RuleSet, rulesFor } from '../src/rules.ts';
 import { landingBody, landingData, landingFaq } from './landing.ts';
 import { type Company, privacy, terms, who } from './legal.ts';
-import { type MoneybirdFacts, moneybirdBody, moneybirdFaq, yearEndBody } from './guides.ts';
+import { costBody, costFaq, type MoneybirdFacts, moneybirdBody, moneybirdFaq, yearEndBody } from './guides.ts';
 import { CHECKED_ON } from './sources.ts';
 import { switchBody, switchFaq, type SwitchFacts } from './switch.ts';
 
@@ -93,7 +93,7 @@ function footer(onHome: boolean): string {
         <p>Boekhouding voor eenmanszaken met weinig facturen. Je praat met je assistent, Bookiz houdt de boeken bij.</p>
       </div>
       <div class="ftr-cols">
-        <div><h3>Product</h3><a href="${at('agents')}">Agents</a><a href="${at('live')}">Demo</a><a href="${at('prijzen')}">Prijzen</a></div>
+        <div><h3>Product</h3><a href="${at('agents')}">Agents</a><a href="${at('live')}">Demo</a><a href="${at('prijzen')}">Prijzen</a><a href="/goedkoop-boekhoudprogramma-zzp/">Wat het kost</a></div>
         <div><h3>Overstappen</h3><a href="/overstappen/">Wanneer en hoe</a><a href="/overstappen/moneybird/">Van Moneybird</a><a href="/jaarafsluiting/">Jaarafsluiting</a></div>
         <div><h3>Open source</h3><a href="${esc(site.repo_url)}">GitHub</a><a href="/belastingregels-${YEAR}/">Belastingregels ${YEAR}</a><a href="${esc(site.repo_url)}/issues">Fout melden</a></div>
         <div><h3>Bookiz</h3><a href="${at('founder')}">Over de maker</a><a href="${at('faq')}">FAQ</a><a href="/privacy/">Privacy</a><a href="/voorwaarden/">Voorwaarden</a></div>
@@ -124,7 +124,11 @@ function page(options: { path: string; title: string; description: string; body:
 <meta property="og:title" content="${esc(options.title)}">
 <meta property="og:description" content="${esc(options.description)}">
 <meta property="og:url" content="${esc(url)}">
-<meta property="og:image" content="${site.site_url}/logo.png">
+<meta property="og:image" content="${site.site_url}/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Bookiz: boekhouden voor zzp’ers met weinig facturen, via je eigen AI-assistent">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preload" href="/fonts/bricolage-grotesque.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -343,7 +347,7 @@ function cited<K extends RuleKey>(key: K): NonNullable<RuleSet['rules'][K]> {
   return rule as NonNullable<RuleSet['rules'][K]>;
 }
 
-const GUIDES = ['/overstappen/', '/overstappen/moneybird/', '/jaarafsluiting/'];
+const GUIDES = ['/overstappen/', '/overstappen/moneybird/', '/jaarafsluiting/', '/goedkoop-boekhoudprogramma-zzp/'];
 const kiaTable = cited('kia').value as { to: number; kind: string }[];
 const KIA_FROM = (kiaTable.find((band) => band.kind === 'none')?.to ?? 0);
 
@@ -406,6 +410,33 @@ const extraPages: Record<string, string> = {
       faqs: moneybirdFaq(facts),
     });
   })(),
+  'goedkoop-boekhoudprogramma-zzp': guidePage({
+    path: '/goedkoop-boekhoudprogramma-zzp/',
+    title: 'Goedkoop boekhoudprogramma voor zzp’ers met weinig facturen | Bookiz',
+    description: `Wat kost Bookiz? € 0 als je het zelf host, ${euro(site.cloud.price_year_excl)} per jaar in de cloud, geen kosten per factuur. Plus wat je verder nodig hebt en wat er niet in zit.`,
+    h1: 'Een goedkoop boekhoudprogramma voor zzp’ers met weinig facturen',
+    lead: `Bookiz kost € 0 als je het zelf host en ${euro(site.cloud.price_year_excl)} per jaar exclusief btw als wij het hosten, ofwel ${euro(site.cloud.price_year_excl / 12)} per maand. Er zijn geen kosten per factuur. Daarnaast heb je een AI-assistent nodig; met Claude kan dat op het gratis abonnement, dat één eigen connector toestaat.`,
+    body: costBody(
+      {
+        cloudYear: euro(site.cloud.price_year_excl),
+        cloudYearIncl: euro(inclVat(site.cloud.price_year_excl)),
+        cloudMonth: euro(site.cloud.price_year_excl / 12),
+        trialDays: site.cloud.trial_days,
+        dfy: site.dfy.open ? { year: euro(site.dfy.founding_price_year_excl), yearIncl: euro(inclVat(site.dfy.founding_price_year_excl)) } : null,
+        repoUrl: site.repo_url,
+      },
+      esc,
+    ),
+    crumbs: [['Wat het kost', '/goedkoop-boekhoudprogramma-zzp/']],
+    faqs: costFaq({
+      cloudYear: euro(site.cloud.price_year_excl),
+      cloudYearIncl: euro(inclVat(site.cloud.price_year_excl)),
+      cloudMonth: euro(site.cloud.price_year_excl / 12),
+      trialDays: site.cloud.trial_days,
+      dfy: null,
+      repoUrl: site.repo_url,
+    }),
+  }),
   jaarafsluiting: guidePage({
     path: '/jaarafsluiting/',
     title: `Jaarafsluiting voor zzp’ers: checklist voor december en januari | Bookiz`,
@@ -453,7 +484,8 @@ for (const [slug, html] of Object.entries(extraPages)) {
 }
 // favicon.ico and the 48px-multiple PNGs are what Google's favicon service (and so Claude's connector list) picks up.
 const ICONS = ['favicon.ico', 'favicon.png', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
-for (const file of ['site.css', 'site.js', 'logo.png', ...ICONS, 'founder.jpg', 'founder-sm.jpg']) {
+const INDEXNOW_KEYS = readdirSync(join(here, 'assets')).filter((name) => /^[0-9a-f]{32}\.txt$/.test(name));
+for (const file of ['site.css', 'site.js', 'logo.png', 'og.png', ...ICONS, 'founder.jpg', 'founder-sm.jpg', ...INDEXNOW_KEYS]) {
   copyFileSync(join(here, 'assets', file), join(dist, file));
 }
 mkdirSync(join(dist, 'logos'), { recursive: true });
@@ -493,6 +525,7 @@ writeFileSync(
 
 - [Wat Bookiz doet en kost](${site.site_url}/)
 - [Belastingregels ${YEAR} voor eenmanszaken, met bron](${site.site_url}/belastingregels-${YEAR}/)
+- [Wat Bookiz kost, en wat je daarnaast nodig hebt](${site.site_url}/goedkoop-boekhoudprogramma-zzp/)
 ${site.repo_url ? `- [Broncode en installatie](${site.repo_url})\n` : ''}
 ## Overstappen
 
