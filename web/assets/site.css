@@ -499,6 +499,8 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visibl
 .plan-btn.outline { border: 1px solid rgba(255, 255, 255, 0.22); color: var(--text); }
 .plan-btn.outline:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
 .plan-btn.outline img { width: 17px; height: 17px; }
+.plan-sub { display: block; margin-top: -12px; text-align: center; font-size: 14px; color: var(--text-3); text-decoration: underline; text-underline-offset: 3px; }
+.plan-sub:hover { color: var(--text); }
 .plan-btn.orange { background: var(--orange); color: var(--ink); }
 .plan-btn.orange:hover { background: var(--orange-hover); color: var(--ink); }
 .plan-btn.white { background: #fff; color: var(--ink); }

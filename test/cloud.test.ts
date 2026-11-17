@@ -7,8 +7,9 @@ import * as expenses from '../src/app/expenses.ts';
 import * as invoices from '../src/app/invoices.ts';
 import * as reports from '../src/app/reports.ts';
 import type { CloudEnv } from '../src/cloud/env.ts';
-import { type Cloud, handle, verifyStripeSignature } from '../src/cloud/handler.ts';
-import { accessOf, type Connector, ensureAccount, findAccount, tenantSchema, withTenant } from '../src/cloud/tenants.ts';
+import { type Cloud, checkoutUrl, handle, verifyStripeSignature } from '../src/cloud/handler.ts';
+import type { Mail } from '../src/mail.ts';
+import { type Account, accessOf, type Connector, ensureAccount, findAccount, tenantSchema, withTenant } from '../src/cloud/tenants.ts';
 import { type Db, openEmbedded, SCHEMA_VERSION } from '../src/db.ts';
 import { invoiceLink, verifyLink } from '../src/receipts.ts';
 import * as store from '../src/store.ts';
@@ -25,20 +26,28 @@ const env: CloudEnv = {
   stripeWebhookSecret: 'whsec_test_secret',
   stripePaymentLink: 'https://buy.stripe.test/abc',
   stripePaymentLinkId: 'plink_bookiz',
+  stripeDfyPaymentLink: 'https://buy.stripe.test/dfy',
+  stripeDfyPaymentLinkId: 'plink_dfy',
+  operatorEmail: 'ops@bookiz.test',
   operatorToken: 'operator-token-for-tests-0123456789',
   trialDays: 30,
 };
 
 /** One embedded database standing in for the server: "connecting" just selects the schema. */
-async function embeddedCloud(): Promise<{ cloud: Cloud; raw: Db; setNow: (iso: string) => void }> {
+async function embeddedCloud(): Promise<{ cloud: Cloud; raw: Db; setNow: (iso: string) => void; sent: Mail[] }> {
   const raw = await openEmbedded();
   let now = new Date('2026-11-16T10:00:00Z');
   const connect: Connector = async (searchPath) => {
     await raw.exec(`set search_path to ${searchPath ?? 'public'}`);
     return { ...raw, close: async () => undefined };
   };
-  const cloud: Cloud = { env, connect, mail: async () => ({ messageId: '<test>' }), now: () => now };
-  return { cloud, raw, setNow: (iso) => (now = new Date(iso)) };
+  const sent: Mail[] = [];
+  const mail = async (message: Mail) => {
+    sent.push(message);
+    return { messageId: '<test>' };
+  };
+  const cloud: Cloud = { env, connect, mail, now: () => now };
+  return { cloud, raw, setNow: (iso) => (now = new Date(iso)), sent };
 }
 
 const alice = { id: '11111111-1111-4111-8111-111111111111', email: 'alice@example.test' };
@@ -122,7 +131,9 @@ test('after the trial the books can be read and exported, not changed', async ()
 
   const paid = { ...account, status: 'active' as const, paid_until: '2028-01-01T00:00:00Z' };
   assert.equal(accessOf(paid, env, cloud.now()).allowed, true);
-  assert.equal(accessOf({ ...paid, status: 'cancelled' }, env, cloud.now()).allowed, false);
+  // The terms promise access until the end of the paid period, also after cancelling.
+  assert.equal(accessOf({ ...paid, status: 'cancelled' }, env, cloud.now()).allowed, true);
+  assert.equal(accessOf({ ...paid, status: 'cancelled', paid_until: '2026-12-01T00:00:00Z' }, env, cloud.now()).allowed, false);
   assert.equal(accessOf({ ...paid, paid_until: '2026-12-01T00:00:00Z' }, env, cloud.now()).allowed, false);
 });
 
@@ -259,6 +270,63 @@ test('only Stripe can activate a subscription, and only once per event', async (
     assert.equal(closed.status, 503, 'without mail configured nobody is created and no code is issued');
     assert.equal(verifyStripeSignature('s', Buffer.from('x'), 'garbage', at), false);
     void raw;
+  } finally {
+    server.close();
+    server.closeAllConnections();
+  }
+});
+
+test('Done For You is paid through its own link after sign-in, the operator hears of it, and one subscription runs at a time', async () => {
+  const { cloud, raw, sent, setNow } = await embeddedCloud();
+  await raw.exec((await import('../src/cloud/tenants.ts')).CONTROL_SCHEMA);
+  const server = createServer((req, res) => void handle(cloud, req, res)).listen(0);
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const webhook = (body: string) =>
+    fetch(`${base}/api/stripe/webhook`, { method: 'POST', body, headers: { 'stripe-signature': stripeHeader(body, 'whsec_test_secret', Math.floor(cloud.now().getTime() / 1000)) } });
+  try {
+    // A visitor who picks a plan on the site signs in first and then goes on to pay.
+    const anonymous = await fetch(`${base}/app/betalen?plan=dfy`, { redirect: 'manual' });
+    assert.equal(anonymous.status, 303);
+    assert.equal(anonymous.headers.get('location'), '/app/login?next=%2Fapp%2Fbetalen%3Fplan%3Ddfy');
+    assert.match(await (await fetch(`${base}/app/login?next=${encodeURIComponent('/app/betalen?plan=dfy')}`)).text(), /name="next" value="\/app\/betalen\?plan=dfy"/);
+    const smuggled = await (await fetch(`${base}/app/login?next=${encodeURIComponent('/app/betalen?plan=dfy&to=https://evil.example')}`)).text();
+    assert.match(smuggled, /name="next" value="\/app"/, 'only the exact pay paths survive sign-in');
+
+    const account = await ensureAccount(cloud.connect, env, bob);
+    const checkout = new URL(checkoutUrl(cloud, account, 'dfy') as string);
+    assert.equal(`${checkout.origin}${checkout.pathname}`, 'https://buy.stripe.test/dfy');
+    assert.equal(checkout.searchParams.get('client_reference_id'), bob.id);
+    assert.equal(checkout.searchParams.get('prefilled_email'), bob.email);
+
+    const bought = JSON.stringify({
+      id: 'evt_dfy_1',
+      type: 'checkout.session.completed',
+      data: { object: { mode: 'subscription', payment_link: 'plink_dfy', payment_status: 'paid', client_reference_id: bob.id, customer: 'cus_dfy' } },
+    });
+    assert.equal((await webhook(bought)).status, 200);
+    const control = await cloud.connect();
+    const paid = (await findAccount(control, bob.id)) as Account;
+    assert.equal(paid.status, 'active');
+    assert.equal(paid.plan, 'dfy');
+    assert.deepEqual(
+      sent.map((m) => m.to),
+      ['ops@bookiz.test'],
+    );
+    assert.match(sent[0]?.text ?? '', /bob@example\.test/);
+
+    // While a subscription can still renew, a second checkout would start a second subscription that nobody sees.
+    assert.equal(checkoutUrl(cloud, paid, 'cloud'), null);
+    assert.equal(checkoutUrl(cloud, paid, 'dfy'), null);
+
+    // Cancelling keeps the paid year, as the terms promise; after it, the books are read-only and buying again is possible.
+    assert.equal((await webhook(JSON.stringify({ id: 'evt_dfy_2', type: 'customer.subscription.deleted', data: { object: { customer: 'cus_dfy' } } }))).status, 200);
+    const cancelled = (await findAccount(control, bob.id)) as Account;
+    assert.equal(cancelled.status, 'cancelled');
+    assert.equal(accessOf(cancelled, env, cloud.now()).allowed, true);
+    assert.equal(checkoutUrl(cloud, cancelled, 'cloud'), null);
+    setNow('2028-01-01T00:00:00Z');
+    assert.equal(accessOf(cancelled, env, cloud.now()).allowed, false);
+    assert.notEqual(checkoutUrl(cloud, cancelled, 'cloud'), null);
   } finally {
     server.close();
     server.closeAllConnections();

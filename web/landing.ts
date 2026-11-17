@@ -12,7 +12,7 @@ export type LandingInput = {
   repoUrl: string;
   contactEmail: string;
   cloud: { open: boolean; priceYear: number; trialDays: number };
-  dfy: { price: number; founding: number; seats: number };
+  dfy: { price: number; founding: number; seats: number; open: boolean };
   rulesYear: number;
   zelfstandigenaftrek: number;
   korLimit: number;
@@ -52,9 +52,17 @@ export function landingBody(input: LandingInput): string {
   // Cloud is sold per year only; the monthly figure is the same price, spread out.
   const perMonth = (input.cloud.priceYear / 12).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cloudNote = `Komt neer op € ${perMonth} per maand, jaarlijks gefactureerd. Excl. btw, eerste ${input.cloud.trialDays} dagen gratis.`;
+  // Paying always goes through sign-in first, so the payment lands on the right account.
   const cloudButton = input.cloud.open
-    ? `<a class="plan-btn orange" href="/app">Probeer ${input.cloud.trialDays} dagen gratis <span class="raquo">»</span></a>`
+    ? `<a class="plan-btn orange" href="/app">Probeer ${input.cloud.trialDays} dagen gratis <span class="raquo">»</span></a>
+          <a class="plan-sub" href="/app/betalen?plan=cloud">Of neem meteen een jaar</a>`
     : `<a class="plan-btn orange" href="${esc(mailto(input.contactEmail, 'Zet me op de lijst voor Bookiz Cloud'))}">Zet me op de lijst <span class="raquo">»</span></a>`;
+  const dfyButton = input.dfy.open
+    ? `<a class="plan-btn white" href="/app/betalen?plan=dfy">Neem Done For You <span class="raquo">»</span></a>`
+    : `<a class="plan-btn white" href="${esc(mailto(input.contactEmail, 'Reservering Done For You'))}">Reserveer je plek <span class="raquo">»</span></a>`;
+  const dfyFoot = input.dfy.open
+    ? 'Done For You start zodra de samenwerking met een zelfstandige boekhouder rond is. Tot die start werkt Bookiz Cloud gewoon en krijg je op verzoek je hele betaling terug.'
+    : 'Reserveren kost niets en verplicht je tot niets. Done For You start zodra de samenwerking met een zelfstandige boekhouder rond is.';
 
   const agentCards = AGENTS.map(
     (agent, i) => `<article class="agent" data-agent="${i}">
@@ -419,11 +427,11 @@ export function landingBody(input: LandingInput): string {
         <div class="plan-head"><h3>Done For You</h3><span class="state pre">PRESALE</span></div>
         <div class="price"><strong>${esc(euro(input.dfy.founding))}</strong><span>/jaar</span><s>${esc(euro(input.dfy.price))}</s></div>
         <p class="plan-note"><b>Founding-prijs voor de eerste ${input.dfy.seats}.</b> Daarna ${esc(euro(input.dfy.price))} per jaar. Excl. btw.</p>
-        <a class="plan-btn white" href="${esc(mailto(input.contactEmail, 'Reservering Done For You'))}">Reserveer je plek <span class="raquo">»</span></a>
+        ${dfyButton}
         <ul class="plan-list"><li>Alles uit Cloud</li><li>Een echte boekhouder die meekijkt</li><li>Je btw-aangiftes, voor je ingediend</li><li>Inclusief je aangifte inkomstenbelasting</li><li>Jij praat, je boekhouder dient in</li></ul>
       </div>
     </div>
-    <p class="price-foot">Reserveren kost niets en verplicht je tot niets. Done For You start zodra de samenwerking met een zelfstandige boekhouder rond is.</p>
+    <p class="price-foot">${esc(dfyFoot)}</p>
   </div>
 </section>
 

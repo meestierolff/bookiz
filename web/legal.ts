@@ -135,13 +135,17 @@ export function privacy(company: Company): string {
   ]);
 }
 
-export function terms(company: Company, cloudPriceExcl: number): string {
+/** `dfy` is the founding price while Done For You can be bought, otherwise null. */
+export function terms(company: Company, prices: { cloud: number; dfy: number | null }): string {
+  const cloudPriceExcl = prices.cloud;
   const mail = `<a href="mailto:${company.email}">${company.email}</a>`;
   return render([
     {
       title: '1. Voor wie en wanneer',
       body: [
-        p('Deze voorwaarden gelden voor het gebruik van deze website en van Bookiz Cloud, de gehoste versie van Bookiz. Met “wij” bedoelen we Bookiz; met “jij” de ondernemer die Bookiz gebruikt.'),
+        p(
+          `Deze voorwaarden gelden voor het gebruik van deze website en van Bookiz Cloud, de gehoste versie van Bookiz${prices.dfy !== null ? ', en voor Done For You' : ''}. Met “wij” bedoelen we Bookiz; met “jij” de ondernemer die Bookiz gebruikt.`,
+        ),
         identity(company),
         p('De open-sourceversie die je zelf host valt niet onder deze voorwaarden, maar onder de licentie in de repository (AGPL-3.0). Daarop geven wij geen ondersteuning en geen garantie.'),
         p('Bookiz Cloud is bedoeld voor ondernemers. Je moet achttien jaar of ouder zijn en bevoegd om namens je onderneming te handelen. Eén account is voor één onderneming.'),
@@ -153,7 +157,9 @@ export function terms(company: Company, cloudPriceExcl: number): string {
         p('Bookiz legt vast wat jij of je AI-assistent aanlevert en rekent daarmee volgens de belastingregels die in de repository staan, met hun bron. Wij doen ons best die regels juist en actueel te houden, maar kunnen niet garanderen dat elke berekening foutloos is.'),
         list([
           'Bookiz is geen belastingadviseur en geen boekhouder. De uitkomsten zijn geen advies.',
-          'Bookiz dient geen aangiftes in bij de Belastingdienst. Dat doe je zelf.',
+          prices.dfy !== null
+            ? 'Bookiz dient geen aangiftes in bij de Belastingdienst. Dat doe je zelf, behalve bij Done For You (zie artikel 4).'
+            : 'Bookiz dient geen aangiftes in bij de Belastingdienst. Dat doe je zelf.',
           'Je AI-assistent is niet van ons. Leest die een bon verkeerd, dan staat er iets verkeerds in je administratie. Controleer wat er geboekt wordt.',
           'Jij blijft verantwoordelijk voor je administratie, je aangiftes en het bewaren van je stukken gedurende de wettelijke termijn.',
         ]),
@@ -178,6 +184,16 @@ export function terms(company: Company, cloudPriceExcl: number): string {
         p('Binnen dertig dagen na je eerste betaling krijg je je geld terug als Bookiz je niet bevalt. Daarna betalen we geen deel van een lopend jaar terug.'),
         p('Wijzigen we de prijs, dan hoor je dat minstens dertig dagen van tevoren. De nieuwe prijs geldt vanaf je volgende verlenging; je kunt dan opzeggen.'),
         p('Kunnen we een betaling niet innen, dan mogen we de toegang opschorten tot er is betaald. Je administratie blijft in die periode bewaard.'),
+        ...(prices.dfy !== null
+          ? [
+              p(
+                `Done For You is Bookiz Cloud met een zelfstandige boekhouder die meekijkt en je btw-aangiftes en je aangifte inkomstenbelasting voor je indient. Het kost € ${prices.dfy} per jaar, exclusief btw (founding-prijs). Je betaalt vooraf via Stripe; het abonnement loopt per jaar vanaf je betaling en wordt elk jaar automatisch verlengd, tenzij je opzegt.`,
+              ),
+              p(
+                'Done For You start zodra de samenwerking met een zelfstandige boekhouder rond is; dat laten we je per e-mail weten. Tot die start kun je Bookiz Cloud gewoon gebruiken en krijg je op verzoek je hele betaling terug.',
+              ),
+            ]
+          : []),
       ],
     },
     {

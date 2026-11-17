@@ -5,14 +5,13 @@
   "cloud": {
     "price_year_excl": 99,
     "trial_days": 30,
-    "stripe_link": "",
-    "open": false
+    "open": true
   },
   "dfy": {
     "price_year_excl": 499,
     "founding_price_year_excl": 399,
     "founding_seats": 50,
-    "stripe_link": ""
+    "open": true
   },
   "company": {
     "name": "Bookiz",

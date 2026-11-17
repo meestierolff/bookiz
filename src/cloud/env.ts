@@ -17,6 +17,11 @@ export type CloudEnv = {
   stripePaymentLink: string | undefined;
   /** Id (plink_…) of the one payment link that buys Bookiz Cloud; other payments in the same Stripe account do not count. */
   stripePaymentLinkId: string | undefined;
+  /** Done For You: Bookiz Cloud with a bookkeeper, bought through a payment link of its own. */
+  stripeDfyPaymentLink: string | undefined;
+  stripeDfyPaymentLinkId: string | undefined;
+  /** Hears about every new Done For You customer, so a paying customer is never missed. */
+  operatorEmail: string | undefined;
   /** Lets the operator ask the health check how the deployment is configured. */
   operatorToken: string | undefined;
   trialDays: number;
@@ -47,6 +52,9 @@ export function loadCloudEnv(env: NodeJS.ProcessEnv = process.env): CloudEnv {
     stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET?.trim() || undefined,
     stripePaymentLink: env.STRIPE_PAYMENT_LINK?.trim() || undefined,
     stripePaymentLinkId: env.STRIPE_PAYMENT_LINK_ID?.trim() || undefined,
+    stripeDfyPaymentLink: env.STRIPE_DFY_PAYMENT_LINK?.trim() || undefined,
+    stripeDfyPaymentLinkId: env.STRIPE_DFY_PAYMENT_LINK_ID?.trim() || undefined,
+    operatorEmail: env.OPERATOR_EMAIL?.trim() || undefined,
     operatorToken: env.OPERATOR_TOKEN?.trim() || undefined,
     trialDays: 30,
   };

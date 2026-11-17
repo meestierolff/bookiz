@@ -20,8 +20,9 @@ const site = JSON.parse(readFileSync(join(here, 'site.json'), 'utf8')) as {
   contact_email: string;
   company: { name: string; legal_name: string; legal_form: string; kvk: string; vat_id: string; address: string };
   /** `open` goes true once sign-in mail works; until then the site does not invite anyone to sign up. */
-  cloud: { price_year_excl: number; trial_days: number; stripe_link: string; open: boolean };
-  dfy: { price_year_excl: number; founding_price_year_excl: number; founding_seats: number; stripe_link: string };
+  cloud: { price_year_excl: number; trial_days: number; open: boolean };
+  /** `open`: Done For You can be paid for (through sign-in and Stripe); otherwise it is a free reservation by mail. */
+  dfy: { price_year_excl: number; founding_price_year_excl: number; founding_seats: number; open: boolean };
 };
 
 const YEAR = 2026;
@@ -123,7 +124,9 @@ function page(options: { path: string; title: string; description: string; body:
 <meta property="og:image" content="${site.site_url}/logo.png">
 <link rel="preload" href="/fonts/bricolage-grotesque.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#0d0d0d">
 <link rel="stylesheet" href="/site.css">
 ${(options.jsonLd ?? []).map((data) => `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`).join('\n')}
@@ -146,7 +149,7 @@ function home(): string {
     repoUrl: site.repo_url,
     contactEmail: site.contact_email,
     cloud: { open: site.cloud.open, priceYear: site.cloud.price_year_excl, trialDays: site.cloud.trial_days },
-    dfy: { price: site.dfy.price_year_excl, founding: site.dfy.founding_price_year_excl, seats: site.dfy.founding_seats },
+    dfy: { price: site.dfy.price_year_excl, founding: site.dfy.founding_price_year_excl, seats: site.dfy.founding_seats, open: site.dfy.open },
     rulesYear: YEAR,
     zelfstandigenaftrek: rules.rules.zelfstandigenaftrek?.value ?? 0,
     korLimit: rules.rules.kor_omzetgrens.value,
@@ -170,6 +173,18 @@ function home(): string {
         offers: [
           { '@type': 'Offer', name: 'Self-host', price: '0', priceCurrency: 'EUR' },
           { '@type': 'Offer', name: 'Cloud', price: String(site.cloud.price_year_excl), priceCurrency: 'EUR', description: 'Per jaar, exclusief btw' },
+          ...(site.dfy.open
+            ? [
+                {
+                  '@type': 'Offer',
+                  name: 'Done For You',
+                  price: String(site.dfy.founding_price_year_excl),
+                  priceCurrency: 'EUR',
+                  description: 'Founding-prijs per jaar, exclusief btw. Start zodra de samenwerking met een zelfstandige boekhouder rond is.',
+                  availability: 'https://schema.org/PreOrder',
+                },
+              ]
+            : []),
         ],
       },
       {
@@ -285,7 +300,7 @@ ${faqs.map(([question, answer]) => `  <h3>${esc(question)}</h3>\n  <p>${esc(answ
     'Algemene voorwaarden',
     'De afspraken voor het gebruik van Bookiz Cloud: wat je mag verwachten, wat het kost en hoe je opzegt.',
     'Kort: Bookiz rekent en bewaart, jij blijft verantwoordelijk voor je administratie en je aangiftes, en je kunt altijd met al je gegevens weg.',
-    terms(company, site.cloud.price_year_excl),
+    terms(company, { cloud: site.cloud.price_year_excl, dfy: site.dfy.open ? site.dfy.founding_price_year_excl : null }),
   ),
 };
 if (!company.kvk || !company.address) {
@@ -302,7 +317,9 @@ for (const [slug, html] of Object.entries(extraPages)) {
   mkdirSync(join(dist, slug), { recursive: true });
   writeFileSync(join(dist, slug, 'index.html'), html);
 }
-for (const file of ['site.css', 'site.js', 'logo.png', 'favicon.png', 'founder.jpg', 'founder-sm.jpg']) {
+// favicon.ico and the 48px-multiple PNGs are what Google's favicon service (and so Claude's connector list) picks up.
+const ICONS = ['favicon.ico', 'favicon.png', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+for (const file of ['site.css', 'site.js', 'logo.png', ...ICONS, 'founder.jpg', 'founder-sm.jpg']) {
   copyFileSync(join(here, 'assets', file), join(dist, file));
 }
 mkdirSync(join(dist, 'logos'), { recursive: true });

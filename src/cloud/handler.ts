@@ -26,11 +26,13 @@ import {
 import { type CloudEnv, loadCloudEnv } from './env.ts';
 import { codePage, consentPage, dashboardPage, forwardPage, loginMail, loginPage, messagePage } from './pages.ts';
 import {
+  ACCOUNT_COLUMNS,
   type Account,
   accessOf,
   type Connector,
   ensureAccount,
   ensureControlSchema,
+  type Plan,
   pgConnector,
   tenantConfig,
   withTenant,
@@ -52,6 +54,7 @@ function redirect(res: ServerResponse, location: string, cookies?: string[]): vo
 /** Only ever send a signed-in browser back to our own pages. */
 function safeNext(value: string | null | undefined): string {
   if (value && /^\/(app|oauth\/consent)(\?[\w=&%.~-]*)?$/.test(value)) return value;
+  if (value && /^\/app\/betalen\?plan=(cloud|dfy)$/.test(value)) return value;
   return '/app';
 }
 
@@ -153,23 +156,35 @@ async function accountByTenant(cloud: Cloud, tenant: string): Promise<Account | 
   if (!/^[0-9a-f]{20}$/.test(tenant)) return null;
   const db = await cloud.connect();
   try {
-    const rows = await db.query<Account>(
-      `select user_id, email, tenant, status, trial_ends_at, paid_until, stripe_customer_id, schema_version, created_at
-       from bookiz_cloud.account where tenant = $1`,
-      [tenant],
-    );
+    const rows = await db.query<Account>(`select ${ACCOUNT_COLUMNS} from bookiz_cloud.account where tenant = $1`, [tenant]);
     return rows[0] ?? null;
   } finally {
     await db.close();
   }
 }
 
-function subscribeUrl(cloud: Cloud, account: Account): string | null {
-  if (!cloud.env.stripePaymentLink) return null;
-  const url = new URL(cloud.env.stripePaymentLink);
+/**
+ * The Stripe checkout for a plan, tied to this account. Null while a subscription
+ * exists that could still renew: a second checkout would start a second
+ * subscription that nobody sees, so changes go by e-mail instead.
+ */
+export function checkoutUrl(cloud: Cloud, account: Account, plan: Plan): string | null {
+  const link = plan === 'dfy' ? cloud.env.stripeDfyPaymentLink : cloud.env.stripePaymentLink;
+  if (!link) return null;
+  const expired = account.paid_until === null || new Date(account.paid_until) <= cloud.now();
+  if (!(account.status === 'trial' || (account.status === 'cancelled' && expired))) return null;
+  const url = new URL(link);
   url.searchParams.set('client_reference_id', account.user_id);
   url.searchParams.set('prefilled_email', account.email);
   return url.toString();
+}
+
+/** Which plan a Stripe checkout bought; other products sold from the same Stripe account buy nothing here. */
+function planOf(env: Cloud['env'], object: Record<string, any>): Plan | null {
+  if (object.mode !== 'subscription' || typeof object.payment_link !== 'string') return null;
+  if (env.stripePaymentLinkId && object.payment_link === env.stripePaymentLinkId) return 'cloud';
+  if (env.stripeDfyPaymentLinkId && object.payment_link === env.stripeDfyPaymentLinkId) return 'dfy';
+  return null;
 }
 
 /** A Supabase client acting as the signed-in owner, for the OAuth consent calls. */
@@ -231,7 +246,7 @@ async function dashboard(cloud: Cloud, req: IncomingMessage, res: ServerResponse
       account,
       access: access.allowed,
       mcpUrl: `${cloud.env.publicUrl}/mcp`,
-      subscribeUrl: subscribeUrl(cloud, account),
+      checkout: { cloud: checkoutUrl(cloud, account, 'cloud') !== null, dfy: checkoutUrl(cloud, account, 'dfy') !== null },
       overview: data.overview,
       missingReceipts: data.missing,
       years: data.years,
@@ -332,7 +347,17 @@ async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url:
   }
 
   const session = await currentSession(cloud.env, req, res);
-  if (!session) return redirect(res, '/app/login');
+  if (!session) {
+    // Someone who chose a plan on the site signs in first and then goes straight on to paying.
+    const back = page === 'betalen' ? safeNext(`${url.pathname}${url.search}`) : '/app';
+    return redirect(res, back === '/app' ? '/app/login' : `/app/login?next=${encodeURIComponent(back)}`);
+  }
+
+  if (page === 'betalen' && req.method === 'GET') {
+    const plan: Plan = url.searchParams.get('plan') === 'dfy' ? 'dfy' : 'cloud';
+    const account = await ensureAccount(cloud.connect, cloud.env, session.user);
+    return redirect(res, checkoutUrl(cloud, account, plan) ?? '/app');
+  }
 
   if (page === 'export' && req.method === 'GET') {
     const year = Number(url.searchParams.get('year'));
@@ -371,6 +396,8 @@ async function stripeWebhook(cloud: Cloud, req: IncomingMessage, res: ServerResp
   }
   const event = JSON.parse(body.toString('utf8')) as { id: string; type: string; data: { object: Record<string, any> } };
   const object = event.data.object;
+  const plan = planOf(cloud.env, object);
+  let newDfyCustomer: { email: string; before: string } | null = null;
   const db = await cloud.connect();
   try {
     await db.transaction(async (tx) => {
@@ -380,16 +407,19 @@ async function stripeWebhook(cloud: Cloud, req: IncomingMessage, res: ServerResp
         event.type,
       ]);
       if (fresh.length === 0) return;
-      // Other products are sold from the same Stripe account; only the Bookiz Cloud link buys Bookiz Cloud.
-      const ours =
-        Boolean(cloud.env.stripePaymentLinkId) && object.payment_link === cloud.env.stripePaymentLinkId && object.mode === 'subscription';
-      if (event.type === 'checkout.session.completed' && ours && object.payment_status === 'paid' && typeof object.client_reference_id === 'string') {
-        await tx.query(
-          `update bookiz_cloud.account set status = 'active', stripe_customer_id = $2,
+      if (event.type === 'checkout.session.completed' && plan && object.payment_status === 'paid' && typeof object.client_reference_id === 'string') {
+        const before = await tx.query<{ status: string; plan: string }>('select status, plan from bookiz_cloud.account where user_id::text = $1', [
+          object.client_reference_id,
+        ]);
+        const updated = await tx.query<{ email: string }>(
+          `update bookiz_cloud.account set status = 'active', plan = $3, stripe_customer_id = $2,
              paid_until = greatest(coalesce(paid_until, now()), now()) + interval '1 year 7 days'
-           where user_id::text = $1`,
-          [object.client_reference_id, typeof object.customer === 'string' ? object.customer : null],
+           where user_id::text = $1 returning email`,
+          [object.client_reference_id, typeof object.customer === 'string' ? object.customer : null, plan],
         );
+        if (plan === 'dfy' && updated[0]) {
+          newDfyCustomer = { email: updated[0].email, before: before[0] ? `${before[0].status}, ${before[0].plan}` : 'onbekend' };
+        }
       } else if (event.type === 'invoice.paid' && object.billing_reason === 'subscription_cycle' && typeof object.customer === 'string') {
         await tx.query(
           `update bookiz_cloud.account set status = 'active', paid_until = greatest(coalesce(paid_until, now()), now()) + interval '1 year 7 days'
@@ -405,6 +435,18 @@ async function stripeWebhook(cloud: Cloud, req: IncomingMessage, res: ServerResp
     });
   } finally {
     await db.close();
+  }
+  const customer = newDfyCustomer as { email: string; before: string } | null;
+  if (customer && cloud.env.operatorEmail) {
+    // After the commit, and never at the cost of the payment: a failed mail must not make Stripe retry the event.
+    await cloud
+      .mail({
+        to: cloud.env.operatorEmail,
+        subject: 'Nieuwe klant voor Done For You',
+        text: `${customer.email} heeft Done For You betaald (founding-prijs).\nAccount hiervoor: ${customer.before}.\n\nNeem contact op voor de start. Had dit account al een betaald Cloud-abonnement, zeg dat dan op in Stripe.`,
+        attachments: [],
+      })
+      .catch(() => undefined);
   }
   send(res, 200, 'ok');
 }

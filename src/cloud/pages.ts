@@ -17,7 +17,8 @@ function shell(title: string, body: string, nonce: string, options: { signedIn?:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>${esc(title)} | Bookiz</title>
-<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <link rel="preload" href="/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/site.css">
 </head>
@@ -77,6 +78,10 @@ ${errorLine(options.error)}
 
 type Overview = Record<string, any>;
 
+/** Kept in step with web/site.json and the Stripe prices. */
+const PRICE = { cloud: 99, dfy: 399 } as const;
+const CONTACT = 'hallo@boekiehouder.nl';
+
 const euro = (value: unknown) =>
   typeof value === 'number' ? `€ ${value.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'onbekend';
 const day = (iso: string) => new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Amsterdam' });
@@ -87,7 +92,8 @@ export function dashboardPage(
     account: Account;
     access: boolean;
     mcpUrl: string;
-    subscribeUrl: string | null;
+    /** Which plans this account can buy now; false while a subscription is running. */
+    checkout: { cloud: boolean; dfy: boolean };
     overview: Overview;
     missingReceipts: { ref: string; vendor: string; date: string; link: string | null }[];
     years: number[];
@@ -95,16 +101,29 @@ export function dashboardPage(
   },
 ): string {
   const { account, overview } = options;
-  const paid = account.status === 'active' && account.paid_until;
+  const paid = account.status !== 'trial' && account.paid_until !== null && options.access;
+  const planName = account.plan === 'dfy' ? 'Done For You' : 'Abonnement';
+  const until = account.paid_until ? esc(day(account.paid_until)) : '';
   const chip = paid
-    ? `<span class="status-chip">Abonnement loopt tot ${esc(day(account.paid_until as string))}</span>`
+    ? account.status === 'cancelled'
+      ? `<span class="status-chip">Opgezegd: je kunt Bookiz gebruiken tot ${until}</span>`
+      : `<span class="status-chip">${planName} loopt tot ${until}</span>`
     : options.access
       ? `<span class="status-chip">Gratis op proef tot ${esc(day(account.trial_ends_at))}</span>`
-      : '<span class="status-chip warn">Proefperiode afgelopen: bekijken en exporteren kan nog, boeken niet</span>';
-  const subscribe =
-    !paid && options.subscribeUrl
-      ? `<div class="choice"><a class="plan-btn orange" href="${esc(options.subscribeUrl)}">Neem Bookiz Cloud, € 99 per jaar <span class="raquo">»</span></a></div>`
-      : '';
+      : account.status === 'trial'
+        ? '<span class="status-chip warn">Proefperiode afgelopen: bekijken en exporteren kan nog, boeken niet</span>'
+        : '<span class="status-chip warn">Je abonnement is afgelopen: bekijken en exporteren kan nog, boeken niet</span>';
+  const buttons = [
+    options.checkout.cloud ? `<a class="plan-btn orange" href="/app/betalen?plan=cloud">Neem Bookiz Cloud, € ${PRICE.cloud} per jaar <span class="raquo">»</span></a>` : '',
+    options.checkout.dfy ? `<a class="plan-btn outline" href="/app/betalen?plan=dfy">Kies Done For You, € ${PRICE.dfy} per jaar <span class="raquo">»</span></a>` : '',
+  ].join('');
+  const subscribe = buttons
+    ? `<div class="choice">${buttons}</div>
+<p class="quiet">Prijzen exclusief btw.${options.checkout.dfy ? ' Done For You start zodra de samenwerking met een zelfstandige boekhouder rond is; tot die start krijg je op verzoek je hele betaling terug.' : ''}</p>`
+    : paid
+      ? `${account.plan === 'dfy' ? '<div class="card accent"><p><strong>Done For You staat voor je klaar.</strong> We nemen contact met je op zodra de samenwerking met een zelfstandige boekhouder rond is. Tot die start werkt Bookiz Cloud gewoon en krijg je op verzoek je hele betaling terug.</p></div>' : ''}
+<p class="quiet">Wisselen of opzeggen? Mail <a href="mailto:${CONTACT}">${CONTACT}</a> vanaf dit adres.</p>`
+      : `<p class="quiet">Opnieuw beginnen of iets regelen rond je abonnement? Mail <a href="mailto:${CONTACT}">${CONTACT}</a>.</p>`;
 
   const isSetUp = overview.setup !== 'nog niet ingericht';
   const btw = overview.btw?.tussenstand_te_betalen;
