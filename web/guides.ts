@@ -79,8 +79,8 @@ export const moneybirdFaq = (f: MoneybirdFacts): [string, string][] => [
 
 export function moneybirdBody(f: MoneybirdFacts, esc: Esc): string {
   return `
-  <h2>Is Bookiz iets voor jou?</h2>
-  <p>Bookiz is bedoeld voor eenmanszaken met een handvol facturen per maand, die hun boekhouding willen doen in een gesprek met hun eigen AI-assistent. Het heeft geen bankkoppeling, geen voorraad en geen loonadministratie. Heb je die nodig, blijf dan bij Moneybird.</p>
+  <h2>Een alternatief voor Moneybird als je weinig factureert</h2>
+  <p>Bookiz is bedoeld voor eenmanszaken met een handvol facturen per maand, die hun boekhouding willen doen in een gesprek met hun eigen AI-assistent. Je betaalt een vast bedrag per jaar, en zelf hosten is gratis. Het heeft geen bankkoppeling, geen voorraad en geen loonadministratie. Heb je die nodig, blijf dan bij Moneybird.</p>
 
   <h2>Stap 1: maak een back-up van elk boekjaar</h2>
   <p>Ga in Moneybird naar <strong>Instellingen › Boekhouding › Boekhouding exporteren</strong>. Klik bij Jaarexport op <strong>Download jaarexport</strong>, kies het boekjaar en klik op <strong>Exporteren</strong>. Zodra de export klaar is, download je het ZIP-bestand. Doe dit voor elk boekjaar dat je moet bewaren: je administratie moet je ${f.retentionYears} jaar kunnen tonen. In hetzelfde menu download je met Auditfile alleen de auditfile.</p>
@@ -155,6 +155,19 @@ ${f.dfy ? `      <tr><th scope="row">Done For You</th><td class="value">${f.dfy.
     <li><strong>Een AI-assistent die MCP ondersteunt.</strong> Bij Claude kan dat op elk abonnement, ook het gratis: daarop mag je één eigen connector toevoegen, en dat is genoeg voor Bookiz. Bij ChatGPT kan een eigen MCP-server met schrijfrechten alleen op Business, Enterprise en Edu.</li>
     <li><strong>Voor zelf hosten:</strong> Node.js en Claude Desktop of Claude Code. De stappen staan in de <a href="${esc(f.repoUrl)}">README op GitHub</a>.</li>
   </ul>
+
+  <h2>Waar let je op bij een goedkoop boekhoudprogramma?</h2>
+  <p>De maandprijs zegt weinig. Vergelijk boekhoudsoftware op wat je in een heel jaar betaalt voor de manier waarop jij werkt:</p>
+  <ul>
+    <li><strong>Betaal je per factuur of per boeking?</strong> Dan stijgen de kosten met je werk. Bookiz rekent een vast bedrag, hoeveel facturen je ook stuurt.</li>
+    <li><strong>Zit er een limiet op het aantal facturen of boekingen?</strong> Een goedkoop pakket met een limiet wordt duur zodra je eroverheen gaat.</li>
+    <li><strong>Kost de bankkoppeling extra?</strong> Heb je haar niet nodig, betaal er dan ook niet voor. Bookiz heeft er geen.</li>
+    <li><strong>Doet het de btw-aangifte en het jaaroverzicht?</strong> Een programma dat alleen factureert, laat het lastigste werk bij jou.</li>
+    <li><strong>Kun je weg met al je gegevens?</strong> Je moet je administratie zeven jaar kunnen tonen, ook na je vertrek.</li>
+  </ul>
+
+  <h2>Zoek je een goedkope boekhouder?</h2>
+  <p>Bookiz zelf is software, geen boekhouder. Wil je dat iemand je aangiftes voor je indient, dan is er Done For You: Bookiz Cloud met een zelfstandige boekhouder die meekijkt en je btw-aangiftes en aangifte inkomstenbelasting indient.${f.dfy ? ` Het kost ${f.dfy.year} per jaar exclusief btw (founding-prijs).` : ''} Done For You start zodra de samenwerking met een boekhouder rond is; tot die start krijg je op verzoek je hele betaling terug.</p>
 
   <h2>Wat erin zit</h2>
   <ul>

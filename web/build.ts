@@ -397,9 +397,9 @@ const extraPages: Record<string, string> = {
     };
     return guidePage({
       path: '/overstappen/moneybird/',
-      title: 'Overstappen van Moneybird: back-up, opzeggen en verder | Bookiz',
+      title: 'Moneybird opzeggen en overstappen bij weinig facturen | Bookiz',
       description:
-        'Weinig facturen en Moneybird is je te veel? Zo maak je een jaarexport, zo zeg je op zonder gegevens kwijt te raken, en zo haal je je klanten naar Bookiz.',
+        'Een alternatief voor Moneybird als je weinig factureert. Maak eerst een jaarexport, zeg dan pas op, en zet je klanten en open facturen over naar Bookiz.',
       h1: 'Overstappen van Moneybird naar Bookiz',
       lead: 'Maak eerst een jaarexport van elk boekjaar in Moneybird, zet je klanten en openstaande facturen over naar Bookiz, en zeg Moneybird pas op als de bedragen kloppen. Veertien dagen na de einddatum van je abonnement verwijdert Moneybird je administratie, dus je back-up moet er vóór die tijd zijn.',
       body: moneybirdBody(facts, esc),
@@ -412,8 +412,8 @@ const extraPages: Record<string, string> = {
   })(),
   'goedkoop-boekhoudprogramma-zzp': guidePage({
     path: '/goedkoop-boekhoudprogramma-zzp/',
-    title: 'Goedkoop boekhoudprogramma voor zzp’ers met weinig facturen | Bookiz',
-    description: `Wat kost Bookiz? € 0 als je het zelf host, ${euro(site.cloud.price_year_excl)} per jaar in de cloud, geen kosten per factuur. Plus wat je verder nodig hebt en wat er niet in zit.`,
+    title: `Goedkoop boekhoudprogramma: € 0 of ${euro(site.cloud.price_year_excl)} per jaar | Bookiz`,
+    description: `Bookiz kost € 0 zelf gehost of ${euro(site.cloud.price_year_excl)} per jaar in de cloud, zonder kosten per factuur. Waar je op let, wat je verder nodig hebt en wat er niet in zit.`,
     h1: 'Een goedkoop boekhoudprogramma voor zzp’ers met weinig facturen',
     lead: `Bookiz kost € 0 als je het zelf host en ${euro(site.cloud.price_year_excl)} per jaar exclusief btw als wij het hosten, ofwel ${euro(site.cloud.price_year_excl / 12)} per maand. Er zijn geen kosten per factuur. Daarnaast heb je een AI-assistent nodig; met Claude kan dat op het gratis abonnement, dat één eigen connector toestaat.`,
     body: costBody(
