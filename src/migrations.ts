@@ -152,4 +152,9 @@ export const MIGRATIONS: string[] = [
   `
   alter table business add column books_start date;
   `,
+  // Some small businesses file btw once a year, with the Belastingdienst's approval.
+  `
+  alter table business drop constraint if exists business_vat_period_check;
+  alter table business add constraint business_vat_period_check check (vat_period in ('month', 'quarter', 'year'));
+  `,
 ];

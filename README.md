@@ -92,7 +92,7 @@ from Bookiz.
 | --- | --- |
 | **Invoices** | Every legally required field, consecutive numbers, PDF, e-mail. A final invoice is never edited, only reversed by a credit invoice. |
 | **Expenses** | Receipts and purchase invoices, also when paid privately. Reverse-charged foreign subscriptions (rubriek 4a/4b), investments with depreciation, kilometres with your own car. |
-| **Btw-aangifte** | Per rubriek in whole euros, with the documents behind every number, the ICP list and the deadline. You copy the figures into Mijn Belastingdienst Zakelijk. |
+| **Btw-aangifte** | Monthly, quarterly or yearly (when the Belastingdienst allows it), per rubriek in whole euros, with the documents behind every number, the ICP list and the deadline. You copy the figures into Mijn Belastingdienst Zakelijk. |
 | **KOR** | Invoices without btw, costs including btw, turnover tracked against the € 20.000 limit. The invoice that would cross it is refused. |
 | **Year report** | Profit, kleinschaligheidsinvesteringsaftrek, zelfstandigenaftrek, startersaftrek, MKB-winstvrijstelling, and what to set aside for income tax and Zvw, also next to a job. |
 | **Receipts** | The original goes to your own mailbox or a folder. The database keeps a SHA-256 hash, not the file. |
