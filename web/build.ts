@@ -20,7 +20,7 @@ const site = JSON.parse(readFileSync(join(here, 'site.json'), 'utf8')) as {
   contact_email: string;
   company: { name: string; legal_name: string; legal_form: string; kvk: string; vat_id: string; address: string };
   /** `open` goes true once sign-in mail works; until then the site does not invite anyone to sign up. */
-  cloud: { price_year_excl: number; price_month_excl: number; trial_days: number; stripe_link: string; open: boolean };
+  cloud: { price_year_excl: number; trial_days: number; stripe_link: string; open: boolean };
   dfy: { price_year_excl: number; founding_price_year_excl: number; founding_seats: number; stripe_link: string };
 };
 
@@ -145,7 +145,7 @@ function home(): string {
     euro,
     repoUrl: site.repo_url,
     contactEmail: site.contact_email,
-    cloud: { open: site.cloud.open, priceYear: site.cloud.price_year_excl, priceMonth: site.cloud.price_month_excl, trialDays: site.cloud.trial_days },
+    cloud: { open: site.cloud.open, priceYear: site.cloud.price_year_excl, trialDays: site.cloud.trial_days },
     dfy: { price: site.dfy.price_year_excl, founding: site.dfy.founding_price_year_excl, seats: site.dfy.founding_seats },
     rulesYear: YEAR,
     zelfstandigenaftrek: rules.rules.zelfstandigenaftrek?.value ?? 0,

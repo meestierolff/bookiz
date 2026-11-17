@@ -4,7 +4,6 @@
   "contact_email": "hallo@boekiehouder.nl",
   "cloud": {
     "price_year_excl": 99,
-    "price_month_excl": 12,
     "trial_days": 30,
     "stripe_link": "",
     "open": false
@@ -20,7 +19,7 @@
     "legal_name": "Top of the World",
     "legal_form": "eenmanszaak",
     "kvk": "92357989",
-    "vat_id": "",
+    "vat_id": "NL004952065B78",
     "address": "Kraaipanstraat 11 B, 1091 PE Amsterdam"
   }
 }
