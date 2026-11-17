@@ -519,6 +519,21 @@ export async function handle(cloud: Cloud, req: IncomingMessage, res: ServerResp
     });
     await ready;
 
+    // Daily call from Vercel Cron. A database on the free Supabase plan is paused after a quiet week; one query a day keeps it awake.
+    if (url.pathname === '/api/cron/keepalive') {
+      const expected = cloud.env.cronSecret ? Buffer.from(`Bearer ${cloud.env.cronSecret}`) : null;
+      const given = Buffer.from(String(req.headers.authorization ?? ''));
+      if (!expected) return send(res, 404, 'Niet gevonden.');
+      if (given.length !== expected.length || !timingSafeEqual(given, expected)) return send(res, 401, 'Niet toegestaan.');
+      const db = await cloud.connect();
+      try {
+        await db.query('select 1');
+      } finally {
+        await db.close();
+      }
+      return send(res, 200, JSON.stringify({ ok: true }), 'application/json');
+    }
+
     if (parts[0] === 'mcp' && parts.length === 1) return await mcp(cloud, req, res);
     if (parts[0] === 'api' && parts[1] === 'stripe' && parts[2] === 'webhook') return await stripeWebhook(cloud, req, res);
     if (parts[0] === 'oauth' && parts[1] === 'consent') return await consent(cloud, req, res, url);
