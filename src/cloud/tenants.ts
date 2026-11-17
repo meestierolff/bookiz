@@ -15,6 +15,7 @@ export type Account = {
   email: string;
   tenant: string;
   status: 'trial' | 'active' | 'past_due' | 'cancelled';
+  plan: Plan;
   trial_ends_at: string;
   paid_until: string | null;
   stripe_customer_id: string | null;
@@ -22,7 +23,10 @@ export type Account = {
   created_at: string;
 };
 
-const ACCOUNT_COLUMNS = 'user_id, email, tenant, status, trial_ends_at, paid_until, stripe_customer_id, schema_version, created_at';
+/** Cloud is the software; Done For You is the software plus a bookkeeper. */
+export type Plan = 'cloud' | 'dfy';
+
+export const ACCOUNT_COLUMNS = 'user_id, email, tenant, status, plan, trial_ends_at, paid_until, stripe_customer_id, schema_version, created_at';
 
 export const CONTROL_SCHEMA = `
   create schema if not exists bookiz_cloud;
@@ -45,6 +49,7 @@ export const CONTROL_SCHEMA = `
   );
   create index if not exists login_attempt_at on bookiz_cloud.login_attempt (at);
   alter table bookiz_cloud.login_attempt add column if not exists kind text not null default 'code_sent';
+  alter table bookiz_cloud.account add column if not exists plan text not null default 'cloud' check (plan in ('cloud', 'dfy'));
   create table if not exists bookiz_cloud.stripe_event (
     id text primary key,
     type text not null,
@@ -121,7 +126,8 @@ export type Access = { allowed: true } | { allowed: false; reason: string };
 
 export function accessOf(account: Account, env: CloudEnv, now: Date): Access {
   const paid = account.paid_until !== null && new Date(account.paid_until) > now;
-  if ((account.status === 'active' || account.status === 'past_due') && paid) return { allowed: true };
+  // A cancelled subscription still runs to the end of the year that was paid for, as the terms promise.
+  if (account.status !== 'trial' && paid) return { allowed: true };
   if (account.status === 'trial' && new Date(account.trial_ends_at) > now) return { allowed: true };
   return {
     allowed: false,
@@ -150,7 +156,8 @@ export function tenantConfig(env: CloudEnv, account: Account): Config {
     fallbackArchiveEmail: account.email,
     dailyMailLimit: 25,
     // A free trial needs no card, so it must not be a way to mail strangers from our domain.
-    mailOnlyTo: account.status === 'active' ? undefined : account.email,
+    // Once paid, also after cancelling, invoices go to customers; the access check stops everything when the paid period ends.
+    mailOnlyTo: account.status === 'trial' ? account.email : undefined,
     // A receipt carries an attachment the customer supplies. It goes to the address they proved is theirs, nowhere else.
     receiptsOnlyTo: account.email,
     dailyReceiptLimit: 100,

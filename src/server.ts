@@ -35,7 +35,16 @@ type Shape = Record<string, z.ZodType>;
 
 /** Build a fresh MCP server around one application context. */
 export function createServer(ctx: Ctx): McpServer {
-  const server = new McpServer({ name: 'bookiz', version: VERSION }, { instructions: INSTRUCTIONS });
+  const server = new McpServer(
+    {
+      name: 'bookiz',
+      title: 'Bookiz',
+      version: VERSION,
+      websiteUrl: 'https://boekiehouder.nl',
+      icons: [{ src: 'https://boekiehouder.nl/icon-192.png', mimeType: 'image/png', sizes: ['192x192'] }],
+    },
+    { instructions: INSTRUCTIONS },
+  );
 
   function tool<S extends Shape>(
     name: string,
