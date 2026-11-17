@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { type RuleKey, type RuleSet, rulesFor } from '../src/rules.ts';
 import { landingBody, landingData, landingFaq } from './landing.ts';
 import { type Company, privacy, terms, who } from './legal.ts';
+import { type MoneybirdFacts, moneybirdBody, moneybirdFaq, yearEndBody } from './guides.ts';
+import { CHECKED_ON } from './sources.ts';
 import { switchBody, switchFaq, type SwitchFacts } from './switch.ts';
 
 /**
@@ -91,7 +93,8 @@ function footer(onHome: boolean): string {
         <p>Boekhouding voor eenmanszaken met weinig facturen. Je praat met je assistent, Bookiz houdt de boeken bij.</p>
       </div>
       <div class="ftr-cols">
-        <div><h3>Product</h3><a href="${at('agents')}">Agents</a><a href="${at('live')}">Demo</a><a href="${at('prijzen')}">Prijzen</a><a href="/overstappen/">Overstappen</a></div>
+        <div><h3>Product</h3><a href="${at('agents')}">Agents</a><a href="${at('live')}">Demo</a><a href="${at('prijzen')}">Prijzen</a></div>
+        <div><h3>Overstappen</h3><a href="/overstappen/">Wanneer en hoe</a><a href="/overstappen/moneybird/">Van Moneybird</a><a href="/jaarafsluiting/">Jaarafsluiting</a></div>
         <div><h3>Open source</h3><a href="${esc(site.repo_url)}">GitHub</a><a href="/belastingregels-${YEAR}/">Belastingregels ${YEAR}</a><a href="${esc(site.repo_url)}/issues">Fout melden</a></div>
         <div><h3>Bookiz</h3><a href="${at('founder')}">Over de maker</a><a href="${at('faq')}">FAQ</a><a href="/privacy/">Privacy</a><a href="/voorwaarden/">Voorwaarden</a></div>
       </div>
@@ -162,10 +165,20 @@ function home(): string {
     body,
     data: landingData(),
     jsonLd: [
+      { '@context': 'https://schema.org', ...ORGANIZATION },
+      {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: 'Bookiz',
+        url: `${site.site_url}/`,
+        inLanguage: 'nl',
+        publisher: { '@id': ORGANIZATION['@id'] },
+      },
       {
         '@context': 'https://schema.org',
         '@type': 'SoftwareApplication',
         name: 'Bookiz',
+        publisher: { '@id': ORGANIZATION['@id'] },
         applicationCategory: 'BusinessApplication',
         operatingSystem: 'Any',
         inLanguage: 'nl',
@@ -215,7 +228,7 @@ function rulesPage(): string {
   return page({
     path: `/belastingregels-${YEAR}/`,
     title: `Belastingregels ${YEAR} voor eenmanszaken, met bron | Bookiz`,
-    description: `De bedragen en percentages van ${YEAR} voor zzp’ers en eenmanszaken: KOR-grens, zelfstandigenaftrek, MKB-winstvrijstelling, KIA en meer, elk met het citaat van de Belastingdienst.`,
+    description: `De bedragen van ${YEAR} voor zzp’ers en eenmanszaken: KOR-grens, zelfstandigenaftrek, MKB-winstvrijstelling, KIA en meer, elk met het citaat van de Belastingdienst.`,
     body: `<main class="doc">
   <h1>Belastingregels ${YEAR} voor eenmanszaken</h1>
   <p class="lead">Dit zijn de ${Object.keys(rules.rules).length} regels waarmee Bookiz voor ${YEAR} rekent. Bij elke regel staat de zin van de Belastingdienst waar het bedrag uit komt. Voor het laatst met de bron vergeleken op ${dutchDate(rules.checked_on)}.</p>
@@ -227,6 +240,85 @@ ${rows}
   </table>
   <p class="after">Dezelfde regels staan als bestand in de repository onder <code>rules/nl-${YEAR}.json</code>. Zie je een fout, meld het daar.</p>
 </main>`,
+  });
+}
+
+/** The publisher of every page, so search and answer engines see one consistent entity. */
+const ORGANIZATION = {
+  '@type': 'Organization',
+  '@id': `${site.site_url}/#organization`,
+  name: company.name,
+  legalName: company.legal_name,
+  url: `${site.site_url}/`,
+  logo: `${site.site_url}/icon-512.png`,
+  email: company.email,
+  ...(company.vat_id ? { vatID: company.vat_id } : {}),
+  sameAs: site.repo_url ? [site.repo_url] : [],
+};
+
+/**
+ * A guide: a visible breadcrumb trail and an "updated" date, with structured
+ * data that says no more than the page shows (Article, BreadcrumbList, and
+ * FAQPage only when the questions are on the page).
+ */
+function guidePage(options: {
+  path: string;
+  title: string;
+  description: string;
+  h1: string;
+  lead: string;
+  body: string;
+  crumbs: [label: string, path: string][];
+  faqs?: [string, string][];
+  extraJsonLd?: unknown[];
+}): string {
+  const trail = [['Bookiz', '/'] as [string, string], ...options.crumbs];
+  const crumbs = trail
+    .map(([label, path], i) => (i === trail.length - 1 ? `<span aria-current="page">${esc(label)}</span>` : `<a href="${esc(path)}">${esc(label)}</a>`))
+    .join(' <span aria-hidden="true">›</span> ');
+  const faqHtml = options.faqs
+    ? `\n  <h2>Veelgestelde vragen</h2>\n${options.faqs.map(([question, answer]) => `  <h3>${esc(question)}</h3>\n  <p>${esc(answer)}</p>`).join('\n')}`
+    : '';
+  return page({
+    path: options.path,
+    title: options.title,
+    description: options.description,
+    body: `<main class="doc prose">
+  <nav class="crumbs" aria-label="Kruimelpad">${crumbs}</nav>
+  <h1>${esc(options.h1)}</h1>
+  <p class="lead">${esc(options.lead)}</p>
+  <p class="updated">Bijgewerkt op <time datetime="${CHECKED_ON}">${dutchDate(CHECKED_ON)}</time></p>
+${options.body}${faqHtml}
+  <p class="note-line"><a href="/#prijzen">Bekijk wat Bookiz kost</a>${site.repo_url ? ` of <a href="${esc(site.repo_url)}">host het zelf, gratis</a>` : ''}.</p>
+</main>`,
+    jsonLd: [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'Article',
+        headline: options.h1,
+        description: options.description,
+        inLanguage: 'nl',
+        mainEntityOfPage: `${site.site_url}${options.path}`,
+        dateModified: CHECKED_ON,
+        author: { '@id': ORGANIZATION['@id'] },
+        publisher: ORGANIZATION,
+      },
+      {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: trail.map(([label, path], i) => ({ '@type': 'ListItem', position: i + 1, name: label, item: `${site.site_url}${path}` })),
+      },
+      ...(options.faqs
+        ? [
+            {
+              '@context': 'https://schema.org',
+              '@type': 'FAQPage',
+              mainEntity: options.faqs.map(([question, answer]) => ({ '@type': 'Question', name: question, acceptedAnswer: { '@type': 'Answer', text: answer } })),
+            },
+          ]
+        : []),
+      ...(options.extraJsonLd ?? []),
+    ],
   });
 }
 
@@ -244,6 +336,17 @@ ${html}
   });
 }
 
+/** A rule a guide cites. The build stops if the year has no such rule, rather than print a wrong amount. */
+function cited<K extends RuleKey>(key: K): NonNullable<RuleSet['rules'][K]> {
+  const rule = rules.rules[key];
+  if (!rule) throw new Error(`rules/nl-${YEAR}.json has no rule "${key}", which a guide cites`);
+  return rule as NonNullable<RuleSet['rules'][K]>;
+}
+
+const GUIDES = ['/overstappen/', '/overstappen/moneybird/', '/jaarafsluiting/'];
+const kiaTable = cited('kia').value as { to: number; kind: string }[];
+const KIA_FROM = (kiaTable.find((band) => band.kind === 'none')?.to ?? 0);
+
 const extraPages: Record<string, string> = {
   privacy: legalPage(
     '/privacy/',
@@ -253,48 +356,79 @@ const extraPages: Record<string, string> = {
     privacy(company),
   ),
   overstappen: (() => {
-    const facts: SwitchFacts = {
-      retentionYears: rules.rules.bewaarplicht_jaren.value,
-      cloudPrice: site.cloud.price_year_excl,
-      q4Deadline: '31 januari',
-      repoUrl: site.repo_url,
-    };
-    const faqs = switchFaq(facts);
-    return page({
+    const facts: SwitchFacts = { retentionYears: rules.rules.bewaarplicht_jaren.value, cloudPrice: site.cloud.price_year_excl, repoUrl: site.repo_url };
+    return guidePage({
       path: '/overstappen/',
-      title: 'Overstappen van boekhoudprogramma per 1 januari | Bookiz',
+      title: 'Overstappen van boekhoudprogramma: per 1 januari of per kwartaal | Bookiz',
       description:
-        'Overstappen van boekhoudpakket als zzp’er: waarom 1 januari het beste moment is, wat je meeneemt, wat je bewaart en hoe het in vijf stappen gaat. Ook vanuit Moneybird.',
-      body: `<main class="doc prose">
-  <h1>Overstappen van boekhoudprogramma per 1 januari</h1>
-  <p class="lead">Voor zzp’ers en eenmanszaken met een kleine administratie. Wat neem je mee, wat laat je achter, en in welke volgorde.</p>
-${switchBody(facts)}
-  <h2>Veelgestelde vragen</h2>
-${faqs.map(([question, answer]) => `  <h3>${esc(question)}</h3>\n  <p>${esc(answer)}</p>`).join('\n')}
-  <p class="note-line"><a href="/#prijzen">Bekijk wat Bookiz kost</a>${site.repo_url ? ` of <a href="${esc(site.repo_url)}">host het zelf, gratis</a>` : ''}.</p>
-</main>`,
-      jsonLd: [
+        'Wanneer stap je als zzp’er het makkelijkst over van boekhoudpakket? Per 1 januari, of in het voorjaar per 1 april. Wat je meeneemt en hoe het in vijf stappen gaat.',
+      h1: 'Overstappen van boekhoudprogramma',
+      lead: 'Voor zzp’ers en eenmanszaken met een kleine administratie. Het beste moment is 1 januari, het op één na beste het begin van een btw-kwartaal, zoals 1 april. Wat neem je mee, wat laat je achter, en in welke volgorde.',
+      body: switchBody(facts, esc),
+      crumbs: [['Overstappen', '/overstappen/']],
+      faqs: switchFaq(facts),
+      extraJsonLd: [
         {
           '@context': 'https://schema.org',
           '@type': 'HowTo',
-          name: 'Overstappen van boekhoudprogramma per 1 januari',
+          name: 'Overstappen van boekhoudprogramma',
           inLanguage: 'nl',
           step: [
             'Exporteer je oude administratie en bewaar die zeven jaar.',
             'Doe je laatste btw-aangifte vanuit je oude pakket.',
-            'Schrijf op welke facturen nog openstaan en welke bedrijfsmiddelen je nog afschrijft.',
+            'Schrijf op welke facturen nog openstaan, welke bedrijfsmiddelen je nog afschrijft en wat je laatste factuurnummer is.',
             'Koppel je assistent aan Bookiz en laat je klanten, openstaande facturen en bedrijfsmiddelen overnemen.',
             'Controleer het openstaande bedrag en zeg dan pas je oude pakket op.',
           ].map((text, index) => ({ '@type': 'HowToStep', position: index + 1, text })),
         },
-        {
-          '@context': 'https://schema.org',
-          '@type': 'FAQPage',
-          mainEntity: faqs.map(([question, answer]) => ({ '@type': 'Question', name: question, acceptedAnswer: { '@type': 'Answer', text: answer } })),
-        },
       ],
     });
   })(),
+  'overstappen/moneybird': (() => {
+    const facts: MoneybirdFacts = {
+      retentionYears: rules.rules.bewaarplicht_jaren.value,
+      cloudPrice: site.cloud.price_year_excl,
+      trialDays: site.cloud.trial_days,
+      korOmzetgrens: euro(rules.rules.kor_omzetgrens.value),
+    };
+    return guidePage({
+      path: '/overstappen/moneybird/',
+      title: 'Overstappen van Moneybird: back-up, opzeggen en verder | Bookiz',
+      description:
+        'Weinig facturen en Moneybird is je te veel? Zo maak je een jaarexport, zo zeg je op zonder gegevens kwijt te raken, en zo haal je je klanten naar Bookiz.',
+      h1: 'Overstappen van Moneybird naar Bookiz',
+      lead: 'Maak eerst een jaarexport van elk boekjaar in Moneybird, zet je klanten en openstaande facturen over naar Bookiz, en zeg Moneybird pas op als de bedragen kloppen. Veertien dagen na de einddatum van je abonnement verwijdert Moneybird je administratie, dus je back-up moet er vóór die tijd zijn.',
+      body: moneybirdBody(facts, esc),
+      crumbs: [
+        ['Overstappen', '/overstappen/'],
+        ['Van Moneybird', '/overstappen/moneybird/'],
+      ],
+      faqs: moneybirdFaq(facts),
+    });
+  })(),
+  jaarafsluiting: guidePage({
+    path: '/jaarafsluiting/',
+    title: `Jaarafsluiting voor zzp’ers: checklist voor december en januari | Bookiz`,
+    description: `Je boekjaar afsluiten als zzp’er: wat vóór 31 december moet, de btw-aangifte in januari en je aangifte inkomstenbelasting. Met de bedragen van ${YEAR} en hun bron.`,
+    h1: 'Je boekjaar afsluiten als zzp’er',
+    lead: 'In december rond je af wat nog bij het oude jaar hoort. In januari doe je de btw-aangifte over het vierde kwartaal: aangifte én betaling moeten uiterlijk 31 januari binnen zijn. Daarna volgt je aangifte inkomstenbelasting, vaak vóór 1 mei.',
+    body: yearEndBody(
+      {
+        year: YEAR,
+        rulesPath: `/belastingregels-${YEAR}/`,
+        urencriterium: rules.rules.urencriterium.value,
+        zelfstandigenaftrek: euro(cited('zelfstandigenaftrek').value),
+        startersaftrek: euro(cited('startersaftrek').value),
+        mkbWinstvrijstelling: `${cited('mkb_winstvrijstelling').value.toLocaleString('nl-NL')}%`,
+        investeringDrempel: euro(rules.rules.investering_drempel.value),
+        kiaVanaf: euro(KIA_FROM),
+        korOmzetgrens: euro(rules.rules.kor_omzetgrens.value),
+        bewaarplichtJaren: rules.rules.bewaarplicht_jaren.value,
+      },
+      esc,
+    ),
+    crumbs: [['Jaarafsluiting', '/jaarafsluiting/']],
+  }),
   voorwaarden: legalPage(
     '/voorwaarden/',
     'Algemene voorwaarden',
@@ -342,12 +476,30 @@ writeFileSync(join(dist, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${s
 writeFileSync(
   join(dist, 'sitemap.xml'),
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${['/', `/belastingregels-${YEAR}/`, ...Object.keys(extraPages).map((slug) => `/${slug}/`)]
-    .map((path) => `  <url><loc>${site.site_url}${path}</loc></url>`)
+    .map((path) => {
+      // Only pages with a known date of their last material change get a lastmod.
+      const lastmod = GUIDES.includes(path) ? CHECKED_ON : path === `/belastingregels-${YEAR}/` ? rules.checked_on : null;
+      return `  <url><loc>${site.site_url}${path}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}</url>`;
+    })
     .join('\n')}\n</urlset>\n`,
 );
 writeFileSync(
   join(dist, 'llms.txt'),
-  `# Bookiz\n\n> Open-source boekhouding voor Nederlandse eenmanszaken met weinig facturen. Geen eigen chatbot: de gebruiker bedient Bookiz via een eigen AI-assistent over MCP. Bookiz dient geen aangiftes in bij de Belastingdienst.\n\n- [Wat Bookiz doet en kost](${site.site_url}/)\n- [Belastingregels ${YEAR} voor eenmanszaken, met bron](${site.site_url}/belastingregels-${YEAR}/)\n- [Overstappen van boekhoudprogramma per 1 januari](${site.site_url}/overstappen/)\n${site.repo_url ? `- [Broncode](${site.repo_url})\n` : ''}`,
+  `# Bookiz
+
+> Open-source boekhouding voor Nederlandse eenmanszaken met weinig facturen. Geen eigen chatbot: de gebruiker bedient Bookiz via een eigen AI-assistent over MCP (Claude, ChatGPT en andere). Zelf hosten is gratis; Bookiz Cloud kost € ${site.cloud.price_year_excl} per jaar exclusief btw. Bookiz rekent volgens de regels van de Belastingdienst, met bron, maar dient geen aangiftes in en is geen belastingadvies.
+
+## Product
+
+- [Wat Bookiz doet en kost](${site.site_url}/)
+- [Belastingregels ${YEAR} voor eenmanszaken, met bron](${site.site_url}/belastingregels-${YEAR}/)
+${site.repo_url ? `- [Broncode en installatie](${site.repo_url})\n` : ''}
+## Overstappen
+
+- [Overstappen van boekhoudprogramma: per 1 januari, per kwartaal of nu](${site.site_url}/overstappen/): welk moment het makkelijkst is, wat je meeneemt en wat je bewaart.
+- [Overstappen van Moneybird naar Bookiz](${site.site_url}/overstappen/moneybird/): jaarexport maken, wat er na opzeggen gebeurt, klanten en openstaande facturen overzetten.
+- [Je boekjaar afsluiten als zzp'er](${site.site_url}/jaarafsluiting/): wat vóór 31 december moet, de btw-aangifte in januari en de aangifte inkomstenbelasting.
+`,
 );
 
 console.log(`web/dist built: ${2 + Object.keys(extraPages).length} pages, ${Object.keys(rules.rules).length} rules for ${YEAR}`);

@@ -47,68 +47,84 @@
   "redirects": [
     {
       "source": "/prijzen",
-      "destination": "/#prijzen",
-      "permanent": false
+      "destination": "https://boekiehouder.nl/#prijzen",
+      "permanent": true
     },
     {
       "source": "/boekie-pro",
-      "destination": "/#prijzen",
-      "permanent": false
+      "destination": "https://boekiehouder.nl/#prijzen",
+      "permanent": true
     },
     {
       "source": "/goedkoop-boekhoudprogramma-zzp",
-      "destination": "/#prijzen",
-      "permanent": false
+      "destination": "https://boekiehouder.nl/#prijzen",
+      "permanent": true
     },
     {
       "source": "/beste-boekhoudprogramma-zzp",
-      "destination": "/",
-      "permanent": false
+      "destination": "https://boekiehouder.nl/",
+      "permanent": true
     },
     {
       "source": "/kennisbank/kleineondernemersregeling-kor",
-      "destination": "/belastingregels-2026/#kor_omzetgrens",
-      "permanent": false
+      "destination": "https://boekiehouder.nl/belastingregels-2026/#kor_omzetgrens",
+      "permanent": true
     },
     {
       "source": "/kennisbank",
-      "destination": "/belastingregels-2026/",
-      "permanent": false
+      "destination": "https://boekiehouder.nl/belastingregels-2026/",
+      "permanent": true
     },
     {
       "source": "/kennisbank/:path*",
-      "destination": "/belastingregels-2026/",
-      "permanent": false
+      "destination": "https://boekiehouder.nl/belastingregels-2026/",
+      "permanent": true
     },
     {
       "source": "/hoe-het-werkt",
-      "destination": "/",
-      "permanent": false
+      "destination": "https://boekiehouder.nl/",
+      "permanent": true
     },
     {
       "source": "/voor-wie",
-      "destination": "/",
-      "permanent": false
+      "destination": "https://boekiehouder.nl/",
+      "permanent": true
     },
     {
       "source": "/boekhouden-naast-baan",
-      "destination": "/",
-      "permanent": false
+      "destination": "https://boekiehouder.nl/",
+      "permanent": true
     },
     {
       "source": "/zzp-naast-loondienst-btw",
-      "destination": "/",
-      "permanent": false
+      "destination": "https://boekiehouder.nl/",
+      "permanent": true
     },
     {
       "source": "/over-ons",
-      "destination": "/",
-      "permanent": false
+      "destination": "https://boekiehouder.nl/",
+      "permanent": true
     },
     {
-      "source": "/:brand(moneybird|jortt|e-boekhouden|financible)-alternatief",
-      "destination": "/overstappen/",
-      "permanent": false
+      "source": "/moneybird-alternatief",
+      "destination": "https://boekiehouder.nl/overstappen/moneybird/",
+      "permanent": true
+    },
+    {
+      "source": "/:brand(jortt|e-boekhouden|financible)-alternatief",
+      "destination": "https://boekiehouder.nl/overstappen/",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.boekiehouder.nl"
+        }
+      ],
+      "destination": "https://boekiehouder.nl/:path*",
+      "permanent": true
     }
   ],
   "regions": [
