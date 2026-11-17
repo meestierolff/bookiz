@@ -24,6 +24,7 @@ import {
   verifyLoginCode,
 } from './auth.ts';
 import { type CloudEnv, loadCloudEnv } from './env.ts';
+import { bookkeeperSheets, toCsv, toXlsx } from '../app/spreadsheet.ts';
 import { codePage, consentPage, dashboardPage, forwardPage, loginMail, loginPage, messagePage } from './pages.ts';
 import {
   ACCOUNT_COLUMNS,
@@ -366,11 +367,24 @@ async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url:
   if (page === 'export' && req.method === 'GET') {
     const year = Number(url.searchParams.get('year'));
     if (!availableYears().includes(year)) return send(res, 400, 'Onbekend jaar.');
+    // Read from fixed lists: the rewrite to this function adds query parameters of its own.
+    const format = (['json', 'xlsx', 'csv'] as const).find((f) => f === url.searchParams.get('format')) ?? 'json';
+    const tab = (['inkomsten', 'uitgaven'] as const).find((t) => t === url.searchParams.get('tab')) ?? 'uitgaven';
     const account = await ensureAccount(cloud.connect, cloud.env, session.user);
-    const data = await withTenant(cloud.connect, cloud.env, account, cloud.mail, (ctx) => reports.exportBooks(ctx, { year }), cloud.now);
-    return send(res, 200, JSON.stringify(data, null, 2), 'application/json; charset=utf-8', {
-      'content-disposition': `attachment; filename="bookiz-${year}.json"`,
-    });
+    if (format === 'json') {
+      const data = await withTenant(cloud.connect, cloud.env, account, cloud.mail, (ctx) => reports.exportBooks(ctx, { year }), cloud.now);
+      return send(res, 200, JSON.stringify(data, null, 2), 'application/json; charset=utf-8', {
+        'content-disposition': `attachment; filename="bookiz-${year}.json"`,
+      });
+    }
+    const sheets = await withTenant(cloud.connect, cloud.env, account, cloud.mail, (ctx) => bookkeeperSheets(ctx, year), cloud.now);
+    if (format === 'xlsx') {
+      return send(res, 200, await toXlsx(sheets), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', {
+        'content-disposition': `attachment; filename="bookiz-${year}.xlsx"`,
+      });
+    }
+    const sheet = sheets.find((s) => s.name.toLowerCase() === tab) as (typeof sheets)[number];
+    return send(res, 200, toCsv(sheet), 'text/csv; charset=utf-8', { 'content-disposition': `attachment; filename="bookiz-${year}-${tab}.csv"` });
   }
   if (page === 'revoke' && req.method === 'POST') {
     const clientId = (await form(req)).get('client_id') ?? '';

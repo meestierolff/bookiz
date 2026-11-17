@@ -184,8 +184,14 @@ ${books}
 ${receipts}
 
 <h2>Je gegevens meenemen</h2>
-<p>Alles van één jaar in één bestand: facturen, uitgaven, aangiftes en het jaaroverzicht. Bewaar het; je moet je administratie zeven jaar kunnen tonen.</p>
-<div class="choice">${options.years.map((year) => `<a class="plan-btn outline" href="/app/export?year=${year}">Export ${year}</a>`).join('')}</div>`,
+<p><strong>Voor je boekhouder:</strong> een Excel-bestand met een tab Inkomsten (elke factuurregel) en een tab Uitgaven (elke bon), met datums, btw-tarief, bedragen excl. en incl. btw. De kolommen tellen op tot de cijfers in je jaaroverzicht.</p>
+${options.years
+  .map(
+    (year) => `<div class="choice"><a class="plan-btn orange" href="/app/export?year=${year}&amp;format=xlsx">Excel ${year}</a><a class="plan-btn outline" href="/app/export?year=${year}&amp;format=csv&amp;tab=inkomsten">CSV inkomsten ${year}</a><a class="plan-btn outline" href="/app/export?year=${year}&amp;format=csv&amp;tab=uitgaven">CSV uitgaven ${year}</a></div>`,
+  )
+  .join('')}
+<p class="quiet"><strong>Als back-up of om te vertrekken:</strong> alles van één jaar in één bestand, met aangiftes en het jaaroverzicht. Bewaar het; je moet je administratie zeven jaar kunnen tonen.</p>
+<div class="choice">${options.years.map((year) => `<a class="plan-btn outline" href="/app/export?year=${year}">Volledige export ${year} (JSON)</a>`).join('')}</div>`,
     nonce,
     { signedIn: true },
   );

@@ -30,7 +30,7 @@ export async function readBody(req: IncomingMessage, limit: number, message = 'H
 export function send(
   res: ServerResponse,
   status: number,
-  body: string,
+  body: string | Buffer,
   type = 'text/plain; charset=utf-8',
   headers: Record<string, string> = {},
 ): void {
