@@ -102,10 +102,84 @@ export function moneybirdBody(f: MoneybirdFacts, esc: Esc): string {
   <p>Opzeggen doe je in Moneybird via <strong>Instellingen › Abonnement › Huidig pakket</strong> met de knop <strong>Abonnement opzeggen</strong>. Je ziet dan twee datums. Tot de einddatum werk je gewoon door. Veertien dagen later verwijdert Moneybird je administratie met alle gegevens, tenzij je alsnog een pakket kiest, zoals Compact. Een back-up maken kan na de einddatum nog, tot de verwijderdatum. Wacht met opzeggen tot je laatste btw-aangifte uit Moneybird is gedaan.</p>
 
   <h2>Wat kost het?</h2>
-  <p>Zelf hosten is gratis. Bookiz Cloud kost € ${f.cloudPrice} per jaar exclusief btw, na ${f.trialDays} dagen op proef. Het overzetten zelf kost niets.</p>
+  <p>Zelf hosten is gratis. Bookiz Cloud kost € ${f.cloudPrice} per jaar exclusief btw, na ${f.trialDays} dagen op proef. Het overzetten zelf kost niets. Wat je verder nodig hebt, staat in <a href="/goedkoop-boekhoudprogramma-zzp/">wat Bookiz kost</a>.</p>
 
   <h2>Bronnen</h2>
   ${sourceList([SOURCES.moneybirdBackup, SOURCES.moneybirdOpzeggen, SOURCES.moneybirdAgents], esc)}
   <p class="note-line">Moneybird is een merk van Moneybird B.V. Bookiz is er niet aan verbonden. De stappen in Moneybird zijn overgenomen uit hun eigen kennisbank.</p>
+`;
+}
+
+export type CostFacts = {
+  cloudYear: string;
+  cloudYearIncl: string;
+  cloudMonth: string;
+  trialDays: number;
+  dfy: { year: string; yearIncl: string } | null;
+  repoUrl: string;
+};
+
+export const costFaq = (f: CostFacts): [string, string][] => [
+  [
+    'Bestaat er een gratis boekhoudprogramma voor zzp’ers?',
+    `Ja. Bookiz kun je gratis zelf hosten; het is open source onder AGPL-3.0. Je installeert het op je eigen computer en koppelt het aan Claude Desktop of Claude Code. Wil je dat niet zelf doen, dan kost Bookiz Cloud ${f.cloudYear} per jaar exclusief btw.`,
+  ],
+  [
+    'Zijn er kosten per factuur?',
+    'Nee. Je betaalt niet per factuur, per bon of per btw-aangifte. Zelf hosten is gratis; Cloud is een vast bedrag per jaar.',
+  ],
+  [
+    'Is Bookiz het goedkoopste boekhoudprogramma?',
+    'Dat hangt af van wat je nodig hebt. Voor een eenmanszaak met weinig facturen die geen bankkoppeling nodig heeft, kost Bookiz weinig. Heb je een bankkoppeling, voorraad of personeel, dan is Bookiz niet geschikt, hoe goedkoop ook.',
+  ],
+  [
+    'Kan ik later weer weg?',
+    'Ja. Je exporteert een heel jaar als één bestand, en bij zelf hosten staat alles al op je eigen computer.',
+  ],
+];
+
+export function costBody(f: CostFacts, esc: Esc): string {
+  return `
+  <h2>Wat Bookiz per jaar kost</h2>
+  <table class="rules">
+    <thead><tr><th scope="col">Versie</th><th scope="col">Per jaar, excl. btw</th><th scope="col">Wat je krijgt</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Zelf hosten</th><td class="value">€ 0</td><td>Alle functies op je eigen computer of server. Open source.</td></tr>
+      <tr><th scope="row">Bookiz Cloud</th><td class="value">${f.cloudYear}</td><td>Wij hosten en houden het bij. ${f.cloudYearIncl} inclusief btw, ofwel ${f.cloudMonth} per maand exclusief btw. De eerste ${f.trialDays} dagen zijn gratis.</td></tr>
+${f.dfy ? `      <tr><th scope="row">Done For You</th><td class="value">${f.dfy.year}</td><td>Cloud plus een zelfstandige boekhouder die je aangiftes indient. ${f.dfy.yearIncl} inclusief btw. Founding-prijs; de dienst start zodra de samenwerking met een boekhouder rond is.</td></tr>\n` : ''}    </tbody>
+  </table>
+  <p>Je betaalt niet per factuur, per bon of per btw-aangifte.</p>
+
+  <h2>Wat je daarnaast nodig hebt</h2>
+  <ul>
+    <li><strong>Een AI-assistent die MCP ondersteunt.</strong> Bij Claude kan dat op elk abonnement, ook het gratis: daarop mag je één eigen connector toevoegen, en dat is genoeg voor Bookiz. Bij ChatGPT kan een eigen MCP-server met schrijfrechten alleen op Business, Enterprise en Edu.</li>
+    <li><strong>Voor zelf hosten:</strong> Node.js en Claude Desktop of Claude Code. De stappen staan in de <a href="${esc(f.repoUrl)}">README op GitHub</a>.</li>
+  </ul>
+
+  <h2>Wat erin zit</h2>
+  <ul>
+    <li>Facturen met alle verplichte gegevens, opeenvolgende nummers, pdf en e-mail.</li>
+    <li>Bonnen en inkoopfacturen, ook als je privé betaalde.</li>
+    <li>Btw-aangifte per rubriek in hele euro’s, met de documenten achter elk getal.</li>
+    <li>De kleineondernemersregeling: facturen zonder btw en je omzet tegen de grens.</li>
+    <li>Een jaaroverzicht met winst, ondernemersaftrek, MKB-winstvrijstelling en wat je opzij zet voor inkomstenbelasting en Zvw.</li>
+    <li>Periodieke facturen, overstappen vanuit een ander pakket, en export van een heel jaar als één bestand.</li>
+  </ul>
+
+  <h2>Wat er niet in zit</h2>
+  <p>Geen bankkoppeling, geen voorraad en geen loonadministratie. Bookiz is niet voor bv’s, het kasstelsel, de margeregeling of goederen over de grens. Heb je dat nodig, kies dan een volledig boekhoudpakket.</p>
+
+  <h2>Waarom het zo weinig kost</h2>
+  <p>Bookiz heeft geen eigen chatbot en geen app: je gebruikt de AI-assistent die je al hebt. Er zit geen AI in Bookiz zelf; een vaste rekenmachine past de belastingregels toe, die met hun bron in een openbaar bestand staan. Daardoor is er weinig te hosten en te onderhouden.</p>
+
+  <h2>Hoe begin je</h2>
+  <ul>
+    <li><a href="/app">Probeer Bookiz Cloud ${f.trialDays} dagen gratis</a>; je logt in met je e-mailadres.</li>
+    <li><a href="${esc(f.repoUrl)}">Host het zelf</a>, gratis.</li>
+    <li>Kom je van een ander pakket? Lees <a href="/overstappen/">wanneer en hoe je overstapt</a>.</li>
+  </ul>
+
+  <h2>Bronnen</h2>
+  ${sourceList([SOURCES.claudeConnectors, SOURCES.chatgptMcp], esc)}
 `;
 }

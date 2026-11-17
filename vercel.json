@@ -56,11 +56,6 @@
       "permanent": true
     },
     {
-      "source": "/goedkoop-boekhoudprogramma-zzp",
-      "destination": "https://boekiehouder.nl/#prijzen",
-      "permanent": true
-    },
-    {
       "source": "/beste-boekhoudprogramma-zzp",
       "destination": "https://boekiehouder.nl/",
       "permanent": true
@@ -116,14 +111,14 @@
       "permanent": true
     },
     {
-      "source": "/:path*",
+      "source": "/:path(.*)",
       "has": [
         {
           "type": "host",
           "value": "www.boekiehouder.nl"
         }
       ],
-      "destination": "https://boekiehouder.nl/:path*",
+      "destination": "https://boekiehouder.nl/:path",
       "permanent": true
     }
   ],
