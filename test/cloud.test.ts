@@ -285,9 +285,12 @@ test('Done For You is paid through its own link after sign-in, the operator hear
     fetch(`${base}/api/stripe/webhook`, { method: 'POST', body, headers: { 'stripe-signature': stripeHeader(body, 'whsec_test_secret', Math.floor(cloud.now().getTime() / 1000)) } });
   try {
     // A visitor who picks a plan on the site signs in first and then goes on to pay.
-    const anonymous = await fetch(`${base}/app/betalen?plan=dfy`, { redirect: 'manual' });
-    assert.equal(anonymous.status, 303);
-    assert.equal(anonymous.headers.get('location'), '/app/login?next=%2Fapp%2Fbetalen%3Fplan%3Ddfy');
+    // On Vercel the rewrite to the function adds `path=…` to the query; the way back must survive that.
+    for (const path of ['/app/betalen?plan=dfy', '/app/betalen?plan=dfy&path=betalen']) {
+      const anonymous = await fetch(`${base}${path}`, { redirect: 'manual' });
+      assert.equal(anonymous.status, 303);
+      assert.equal(anonymous.headers.get('location'), '/app/login?next=%2Fapp%2Fbetalen%3Fplan%3Ddfy', path);
+    }
     assert.match(await (await fetch(`${base}/app/login?next=${encodeURIComponent('/app/betalen?plan=dfy')}`)).text(), /name="next" value="\/app\/betalen\?plan=dfy"/);
     const smuggled = await (await fetch(`${base}/app/login?next=${encodeURIComponent('/app/betalen?plan=dfy&to=https://evil.example')}`)).text();
     assert.match(smuggled, /name="next" value="\/app"/, 'only the exact pay paths survive sign-in');

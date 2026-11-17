@@ -349,7 +349,9 @@ async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url:
   const session = await currentSession(cloud.env, req, res);
   if (!session) {
     // Someone who chose a plan on the site signs in first and then goes straight on to paying.
-    const back = page === 'betalen' ? safeNext(`${url.pathname}${url.search}`) : '/app';
+    // Built from the plan alone: Vercel's rewrite adds its own query parameters to the URL.
+    const chosen = url.searchParams.get('plan');
+    const back = page === 'betalen' && (chosen === 'cloud' || chosen === 'dfy') ? `/app/betalen?plan=${chosen}` : '/app';
     return redirect(res, back === '/app' ? '/app/login' : `/app/login?next=${encodeURIComponent(back)}`);
   }
 
