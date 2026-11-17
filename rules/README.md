@@ -35,3 +35,33 @@ that year rather than guessed.
 
 The files in this folder are MIT-licensed (see `LICENSE` here), separately from
 the AGPL engine, so bookkeepers and other tools can reuse them freely.
+
+## Validating a year
+
+Three separate questions, each with its own check. Do not let one stand in for
+another.
+
+1. **Is every quote still on its source page?** `npm run rules:sources` fetches
+   each source and looks for the quote. A changed or unreachable page fails.
+   It needs the network, so it is not part of `npm run verify`. A pass says the
+   Belastingdienst has not changed the sentence; it does not say the value is
+   right.
+2. **Does each value follow from its quote, and are the limitations acceptable?**
+   That needs a person who knows Dutch tax. `npm run rules:review -- 2026 review.xlsx`
+   writes a sheet with every rule, its quote, source and the limitations Bookiz
+   knows of, plus empty columns for a verdict.
+3. **Does Bookiz calculate correctly with them?** The second tab of the review
+   sheet lists situations. A bookkeeper fills in the expected outcome by hand;
+   each one that comes back becomes a test in `test/`, with the bookkeeper's
+   figures as the expected values.
+
+An independent reviewer, human or AI, gets the rule file and the source pages,
+not our conclusions. A prompt that works for an AI reviewer:
+
+> You are checking a Dutch tax rule file for sole proprietors. For every rule
+> in `rules/nl-2026.json`, open its `source` URL and answer: (a) is `quote`
+> literally on the page, (b) does `value` follow from that quote, (c) is the
+> `note` correct and complete about what an engine should not do with it. Then
+> read `src/core/` and list any calculation that uses a rule differently from
+> what its source says. Report only what you verified on the page, with the
+> sentence you relied on. Say "not verified" where you could not open a page.
