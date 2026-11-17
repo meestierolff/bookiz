@@ -22,6 +22,8 @@ export type CloudEnv = {
   stripeDfyPaymentLinkId: string | undefined;
   /** Hears about every new Done For You customer, so a paying customer is never missed. */
   operatorEmail: string | undefined;
+  /** Accounts that always have full access, without a trial or subscription: the operator's own. Lower case. */
+  adminEmails: string[];
   /** Lets the operator ask the health check how the deployment is configured. */
   operatorToken: string | undefined;
   trialDays: number;
@@ -55,6 +57,10 @@ export function loadCloudEnv(env: NodeJS.ProcessEnv = process.env): CloudEnv {
     stripeDfyPaymentLink: env.STRIPE_DFY_PAYMENT_LINK?.trim() || undefined,
     stripeDfyPaymentLinkId: env.STRIPE_DFY_PAYMENT_LINK_ID?.trim() || undefined,
     operatorEmail: env.OPERATOR_EMAIL?.trim() || undefined,
+    adminEmails: (env.ADMIN_EMAILS ?? '')
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter((email) => email.includes('@')),
     operatorToken: env.OPERATOR_TOKEN?.trim() || undefined,
     trialDays: 30,
   };
