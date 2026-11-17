@@ -12,19 +12,6 @@
     return node;
   };
 
-  // ---------- Billing toggle (also works without the demo data) ----------
-  const toggles = $$('[data-billing]');
-  toggles.forEach((button) => {
-    button.addEventListener('click', () => {
-      const billing = button.dataset.billing;
-      toggles.forEach((other) => other.setAttribute('aria-pressed', String(other === button)));
-      ['cloud-price', 'cloud-per', 'cloud-note'].forEach((id) => {
-        const node = document.getElementById(id);
-        if (node && node.dataset[billing]) node.textContent = node.dataset[billing];
-      });
-    });
-  });
-
   // ---------- FAQ: one answer open at a time, also where <details name> is unsupported ----------
   const faqs = $$('.faq-item');
   faqs.forEach((item) => {

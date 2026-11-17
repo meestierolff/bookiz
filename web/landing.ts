@@ -11,7 +11,7 @@ export type LandingInput = {
   euro: (amount: number) => string;
   repoUrl: string;
   contactEmail: string;
-  cloud: { open: boolean; priceYear: number; priceMonth: number; trialDays: number };
+  cloud: { open: boolean; priceYear: number; trialDays: number };
   dfy: { price: number; founding: number; seats: number };
   rulesYear: number;
   zelfstandigenaftrek: number;
@@ -49,11 +49,9 @@ export function landingBody(input: LandingInput): string {
   const euro = (amount: number) => input.euro(amount).replace('€ ', '€\u00a0');
   const demoAssistant = ASSISTANTS[1] as { name: string; logo: string };
   const first = SCENARIOS[0] as (typeof SCENARIOS)[number];
-  const monthsCost = input.cloud.priceMonth * 12;
-  const savePct = Math.round((1 - input.cloud.priceYear / monthsCost) * 100);
+  // Cloud is sold per year only; the monthly figure is the same price, spread out.
   const perMonth = (input.cloud.priceYear / 12).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const cloudNoteYear = `Komt neer op € ${perMonth} per maand. Excl. btw, eerste ${input.cloud.trialDays} dagen gratis.`;
-  const cloudNoteMonth = `Of ${euro(input.cloud.priceYear)} per jaar, dan bespaar je ${euro(monthsCost - input.cloud.priceYear)}. Excl. btw, eerste ${input.cloud.trialDays} dagen gratis.`;
+  const cloudNote = `Komt neer op € ${perMonth} per maand, jaarlijks gefactureerd. Excl. btw, eerste ${input.cloud.trialDays} dagen gratis.`;
   const cloudButton = input.cloud.open
     ? `<a class="plan-btn orange" href="/app">Probeer ${input.cloud.trialDays} dagen gratis <span class="raquo">»</span></a>`
     : `<a class="plan-btn orange" href="${esc(mailto(input.contactEmail, 'Zet me op de lijst voor Bookiz Cloud'))}">Zet me op de lijst <span class="raquo">»</span></a>`;
@@ -399,10 +397,6 @@ export function landingBody(input: LandingInput): string {
   <div class="inner">
     <h2 class="h2">Eerlijke prijzen.</h2>
     <p class="lede">Gratis als je het zelf doet. Een boekhouder erbij als je het helemaal kwijt wilt.</p>
-    <div class="toggle" role="group" aria-label="Betaal per maand of per jaar">
-      <button type="button" data-billing="maand" aria-pressed="false">Per maand</button>
-      <button type="button" data-billing="jaar" aria-pressed="true">Per jaar <span class="save">−${savePct}%</span></button>
-    </div>
     <div class="plans">
       <div class="plan">
         <div class="plan-head"><h3>Self-host</h3><span class="state now">NU BESCHIKBAAR</span></div>
@@ -415,8 +409,8 @@ export function landingBody(input: LandingInput): string {
         <span class="ribbon">AANRADER</span>
         <div class="plan">
           <div class="plan-head"><h3>Cloud</h3><span class="state soon">${input.cloud.open ? 'NU OPEN' : 'BINNENKORT'}</span></div>
-          <div class="price"><strong id="cloud-price" data-jaar="${esc(euro(input.cloud.priceYear))}" data-maand="${esc(euro(input.cloud.priceMonth))}">${esc(euro(input.cloud.priceYear))}</strong><span id="cloud-per" data-jaar="/jaar" data-maand="/maand">/jaar</span></div>
-          <p class="plan-note" id="cloud-note" data-jaar="${esc(cloudNoteYear)}" data-maand="${esc(cloudNoteMonth)}">${esc(cloudNoteYear)}</p>
+          <div class="price"><strong>${esc(euro(input.cloud.priceYear))}</strong><span>/jaar</span></div>
+          <p class="plan-note">${esc(cloudNote)}</p>
           ${cloudButton}
           <ul class="plan-list"><li>Alles uit Self-host</li><li>Wij hosten en houden het up-to-date</li><li>Je assistent logt in met je e-mailadres</li><li>Bonnen uploaden vanaf je telefoon</li><li>Eigen, afgeschermd databaseschema</li></ul>
         </div>
