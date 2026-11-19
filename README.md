@@ -192,6 +192,10 @@ btw rates, the KOR limit, the KIA table, income tax brackets, heffingskortingen
 and more. The engine refuses to calculate for a year without a rule file; it
 never extrapolates.
 
+A scheduled workflow checks every night that each quote is still on its
+source page (`npm run rules:sources`), so a changed Belastingdienst page
+shows up as a red run.
+
 Found a wrong figure? Open an issue or a pull request against the rule file.
 See [rules/README.md](rules/README.md). The rules are MIT-licensed so anyone can
 reuse them.
