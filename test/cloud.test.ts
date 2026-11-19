@@ -8,6 +8,7 @@ import * as invoices from '../src/app/invoices.ts';
 import * as reports from '../src/app/reports.ts';
 import type { CloudEnv } from '../src/cloud/env.ts';
 import { type Cloud, checkoutUrl, handle, verifyStripeSignature } from '../src/cloud/handler.ts';
+import { loginPage, messagePage } from '../src/cloud/pages.ts';
 import type { Mail } from '../src/mail.ts';
 import { type Account, accessOf, type Connector, ensureAccount, findAccount, isAdmin, tenantConfig, tenantSchema, withTenant } from '../src/cloud/tenants.ts';
 import { type Db, openEmbedded, SCHEMA_VERSION } from '../src/db.ts';
@@ -373,5 +374,11 @@ test('the daily keep-alive answers only to Vercel Cron and touches the database'
       server.close();
       server.closeAllConnections();
     }
+  }
+});
+
+test('Bookiz Cloud pages count no visits; only the public site does', () => {
+  for (const html of [loginPage('nonce', { next: '/app' }), messagePage('nonce', 'Klaar', 'Gelukt.')]) {
+    assert.doesNotMatch(html, /_vercel\/insights/);
   }
 });

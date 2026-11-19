@@ -45,6 +45,9 @@ for (const [path, html] of pages) {
   if (canonical !== `${origin}${path}`) problems.push(`${path}: canonical is ${canonical ?? 'missing'}, expected ${origin}${path}`);
   const h1s = (html.match(/<h1[\s>]/g) ?? []).length;
   if (h1s !== 1) problems.push(`${path}: ${h1s} h1 elements`);
+  // The privacy statement says the public pages count visits with Vercel Web Analytics.
+  const analytics = (html.match(/<script src="\/_vercel\/insights\/script\.js" defer><\/script>/g) ?? []).length;
+  if (analytics !== 1) problems.push(`${path}: ${analytics} Web Analytics scripts, expected 1`);
   for (const m of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) {
     try {
       JSON.parse(m[1] as string);

@@ -126,7 +126,9 @@ test('over HTTP: token required, receipt upload page and invoice PDF behind sign
     assert.ok(expense.receipt_help.includes(link));
     const forged = link.replace(/.$/, (last) => (last === '0' ? '1' : '0'));
     assert.equal((await fetch(forged)).status, 404, 'a wrong signature finds nothing');
-    assert.match(await (await fetch(link)).text(), /Kies een foto of pdf van de bon/);
+    const uploadPage = await (await fetch(link)).text();
+    assert.match(uploadPage, /Kies een foto of pdf van de bon/);
+    assert.doesNotMatch(uploadPage, /_vercel\/insights/, 'the privacy statement promises no visit counting outside the public site');
     assert.equal((await fetch(link, { method: 'PUT', body: 'geen foto' })).status, 400);
     const uploaded = await fetch(link, { method: 'PUT', body: PNG });
     assert.equal(uploaded.status, 200);
