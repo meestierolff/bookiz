@@ -121,6 +121,28 @@ export async function vatReturn(ctx: Ctx, input: { period?: string | undefined }
   };
 }
 
+/** The figures that filing `period` would freeze; refuses a period that is still running or already filed. */
+function fileable(period: string, books: Books, todayDate: string): VatReturn {
+  const { to } = checkPeriod(period, books.business);
+  if (to >= todayDate) throw new BookizError(`Het tijdvak ${period} is nog niet afgelopen.`);
+  if (books.filings.some((filing) => filing.period === period)) {
+    throw new BookizError(`De aangifte over ${period} staat al als gedaan geregistreerd.`);
+  }
+  return returnFor(period, books);
+}
+
+/** What the owner confirms before a period is frozen. */
+export async function filingQuestion(ctx: Ctx, input: { period: string; filed_on?: string | undefined }): Promise<string> {
+  const todayDate = todayOf(ctx);
+  const filedOn = assertDate(input.filed_on ?? todayDate, 'datum van aangifte');
+  const { totaal_te_betalen: payable } = fileable(input.period, await loadBooks(ctx.db), todayDate);
+  return (
+    `De btw-aangifte over ${input.period} vastleggen als ingediend op ${filedOn.split('-').reverse().join('-')}? ` +
+    (payable >= 0 ? `Te betalen: € ${payable}. ` : `Terug te krijgen: € ${-payable}. `) +
+    'Doe dit alleen als je de aangifte echt hebt ingediend; daarna kan in dit tijdvak niets meer wijzigen.'
+  );
+}
+
 export async function markVatReturnFiled(ctx: Ctx, input: { period: string; filed_on?: string | undefined }) {
   const todayDate = todayOf(ctx);
   const filedOn = assertDate(input.filed_on ?? todayDate, 'datum van aangifte');
@@ -128,13 +150,7 @@ export async function markVatReturnFiled(ctx: Ctx, input: { period: string; file
   // period between calculating the figures and freezing them.
   const figures = await ctx.db.transaction(async (tx) => {
     await store.lockBusiness(tx);
-    const books = await loadBooks(tx);
-    const { to } = checkPeriod(input.period, books.business);
-    if (to >= todayDate) throw new BookizError(`Het tijdvak ${input.period} is nog niet afgelopen.`);
-    if (books.filings.some((filing) => filing.period === input.period)) {
-      throw new BookizError(`De aangifte over ${input.period} staat al als gedaan geregistreerd.`);
-    }
-    const computed = returnFor(input.period, books);
+    const computed = fileable(input.period, await loadBooks(tx), todayDate);
     await store.saveFiling(tx, {
       period: input.period,
       filed_on: filedOn,
@@ -301,16 +317,20 @@ export async function exportBooks(ctx: Ctx, input: { year: number }) {
   const todayDate = todayOf(ctx);
   const inYear = (date: string) => yearOf(date) === input.year;
   const taxYear = await store.getTaxYear(ctx.db, input.year);
-  return inEuros({
-    exported_on: todayDate,
-    year: input.year,
-    business,
-    invoices: invoices.filter((invoice) => inYear(invoice.issue_date)),
-    expenses: expenses.filter((expense) => inYear(expense.date)).map(present),
-    vat_filings: filings.filter((filing) => filing.period.startsWith(String(input.year))),
-    year_report: computeYear({ year: input.year, business, taxYear, invoices, expenses }),
-    rules: rulesFor(input.year),
-  });
+  return {
+    ...(inEuros({
+      exported_on: todayDate,
+      year: input.year,
+      business,
+      invoices: invoices.filter((invoice) => inYear(invoice.issue_date)),
+      expenses: expenses.filter((expense) => inYear(expense.date)).map(present),
+      vat_filings: filings.filter((filing) => filing.period.startsWith(String(input.year))),
+      year_report: computeYear({ year: input.year, business, taxYear, invoices, expenses }),
+      rules: rulesFor(input.year),
+    }) as Record<string, unknown>),
+    // Tool input is in euros already (the tool boundary), so the log needs no conversion.
+    audit_log: await store.listAudit(ctx.db, input.year),
+  };
 }
 
 export function taxRules(input: { year?: number | undefined; key?: string | undefined }, todayDate: string) {

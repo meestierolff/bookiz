@@ -9,6 +9,7 @@ import { invoiceTotals } from '../core/vat.ts';
 import { invoiceRemarks, renderInvoicePdf } from '../pdf.ts';
 import { invoiceLink } from '../receipts.ts';
 import { rulesFor } from '../rules.ts';
+import type { Queryable } from '../db.ts';
 import * as store from '../store.ts';
 import { type Ctx, todayOf } from './context.ts';
 
@@ -268,7 +269,10 @@ async function requireFinal(ctx: Ctx, number: string): Promise<Invoice> {
   return invoice;
 }
 
-export async function sendInvoice(ctx: Ctx, input: { number: string; to?: string | undefined; message?: string | undefined }) {
+type SendInput = { number: string; to?: string | undefined; message?: string | undefined };
+
+/** The invoice and where it would really go, so the question to the owner and the e-mail agree. */
+async function prepareSend(ctx: Ctx, input: SendInput) {
   const invoice = await requireFinal(ctx, input.number);
   if (invoice.imported) {
     throw new BookizError(
@@ -286,6 +290,36 @@ export async function sendInvoice(ctx: Ctx, input: { number: string; to?: string
       'Geef "to" mee of sla het adres op met save_contact.',
     );
   }
+  const copyTo = business.email && !ctx.config.mailOnlyTo ? business.email : null;
+  return { invoice, business, intended, to, copyTo };
+}
+
+const dutchDate = (iso: string) => iso.split('-').reverse().join('-');
+
+/** What the owner confirms before a draft becomes final, read from the stored draft rather than from the assistant. */
+export async function finalizeQuestion(ctx: Ctx, draftId: number): Promise<string> {
+  const invoice = await store.getInvoice(ctx.db, draftId);
+  if (invoice.status !== 'draft') throw new BookizError(`Factuur ${invoice.number} is al definitief.`);
+  const contact = await store.getContact(ctx.db, invoice.contact_id);
+  const lines = invoice.lines.map((line) => `${line.description} (${line.quantity} × ${formatEur(line.unit_price_cents)})`).join('; ');
+  return (
+    `Factuur aan ${contact.name}, gedateerd ${dutchDate(invoice.issue_date)}, definitief maken? ${lines}. ` +
+    `Totaal ${formatEur(invoice.net_cents)} + ${formatEur(invoice.vat_cents)} btw = ${formatEur(invoice.total_cents)}. ` +
+    'Daarna krijgt hij een nummer en kan hij niet meer worden aangepast, alleen gecrediteerd.'
+  );
+}
+
+/** What the owner confirms before an invoice leaves the building: the address it really goes to. */
+export async function sendQuestion(ctx: Ctx, input: SendInput): Promise<string> {
+  const { invoice, to, copyTo } = await prepareSend(ctx, input);
+  return (
+    `Factuur ${invoice.number} van ${formatEur(invoice.total_cents)} e-mailen naar ${to}${copyTo ? `, met een kopie naar ${copyTo}` : ''}?` +
+    (input.message ? `\n\nBericht:\n${input.message}` : '')
+  );
+}
+
+export async function sendInvoice(ctx: Ctx, input: SendInput) {
+  const { invoice, business, intended, to, copyTo } = await prepareSend(ctx, input);
   const limit = ctx.config.dailyMailLimit;
   if (limit !== undefined) {
     // Claim a slot before sending, behind the business lock: two parallel calls
@@ -317,7 +351,7 @@ export async function sendInvoice(ctx: Ctx, input: { number: string; to?: string
   const { messageId } = await ctx.mail({
     to,
     // A copy to the owner keeps the sent invoice in their own mailbox.
-    ...(business.email && !ctx.config.mailOnlyTo ? { cc: business.email, replyTo: business.email } : {}),
+    ...(copyTo ? { cc: copyTo, replyTo: copyTo } : {}),
     subject: `${isCredit ? 'Creditfactuur' : 'Factuur'} ${invoice.number} van ${business.name}`,
     text,
     attachments: [
@@ -328,7 +362,7 @@ export async function sendInvoice(ctx: Ctx, input: { number: string; to?: string
   return {
     number: invoice.number,
     sent_to: to,
-    copy_to: ctx.config.mailOnlyTo ? null : business.email,
+    copy_to: copyTo,
     message_id: messageId,
     ...(ctx.config.mailOnlyTo
       ? {
@@ -348,16 +382,31 @@ export async function registerPayment(ctx: Ctx, input: { number: string; paid_on
   return summarize(await store.getInvoice(ctx.db, invoice.id), todayOf(ctx));
 }
 
+async function checkCreditable(q: Queryable, original: Invoice): Promise<void> {
+  if (original.status !== 'final') throw new BookizError('Een concept kun je gewoon aanpassen; crediteren is niet nodig.');
+  if (original.credit_of) throw new BookizError('Een creditfactuur kan niet opnieuw worden gecrediteerd.');
+  const already = await q.query<{ number: string }>('select number from invoice where credit_of = $1', [original.id]);
+  if (already[0]) throw new BookizError(`Factuur ${original.number} is al gecrediteerd met ${already[0].number}.`);
+}
+
+/** What the owner confirms before a final invoice is reversed. */
+export async function creditQuestion(ctx: Ctx, input: { number: string; reason?: string | undefined }): Promise<string> {
+  const original = await store.getInvoice(ctx.db, input.number.trim());
+  await checkCreditable(ctx.db, original);
+  return (
+    `Factuur ${original.number} aan ${original.contact_snapshot?.name ?? 'de klant'} van ${formatEur(original.total_cents)} crediteren? ` +
+    `Er komt een definitieve creditfactuur van ${formatEur(-original.total_cents)} met de datum van vandaag.` +
+    (input.reason ? ` Reden: ${input.reason.trim()}` : '')
+  );
+}
+
 /** A final invoice is never edited or deleted; it is reversed by a credit invoice. */
 export async function creditInvoice(ctx: Ctx, input: { number: string; reason?: string | undefined }) {
   const todayDate = todayOf(ctx);
   const creditNumber = await ctx.db.transaction(async (tx) => {
     const business = await store.lockBusiness(tx);
     const original = await store.getInvoice(tx, input.number.trim(), true);
-    if (original.status !== 'final') throw new BookizError('Een concept kun je gewoon aanpassen; crediteren is niet nodig.');
-    if (original.credit_of) throw new BookizError('Een creditfactuur kan niet opnieuw worden gecrediteerd.');
-    const already = await tx.query<{ number: string }>('select number from invoice where credit_of = $1', [original.id]);
-    if (already[0]) throw new BookizError(`Factuur ${original.number} is al gecrediteerd met ${already[0].number}.`);
+    await checkCreditable(tx, original);
 
     // Mirror the stored amounts exactly; never recalculate a reversal.
     const lines = original.lines.map((line) => ({ ...line, quantity: -line.quantity }));
