@@ -1,0 +1,21 @@
+name: rules-sources
+# Every quote in /rules must still appear on its Belastingdienst page. A red run
+# means a source page changed under us: re-read it before trusting the figure.
+on:
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run rules:sources
