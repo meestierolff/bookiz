@@ -1,3 +1,4 @@
+import type { Approval } from './approval.ts';
 import type { Queryable } from './db.ts';
 import { BookizError } from './errors.ts';
 import type { IsoDate } from './core/dates.ts';
@@ -361,10 +362,27 @@ export async function claimDaily(tx: Queryable, kind: string, limit: number, det
   return true;
 }
 
-export async function logAudit(q: Queryable, tool: string, input: unknown, outcome: string): Promise<void> {
-  await q.query('insert into audit_log (tool, input, outcome) values ($1, $2::jsonb, $3)', [
+export async function logAudit(q: Queryable, tool: string, input: unknown, outcome: string, approval: Approval | null = null): Promise<void> {
+  await q.query('insert into audit_log (tool, input, outcome, approval) values ($1, $2::jsonb, $3, $4)', [
     tool,
     JSON.stringify(input ?? {}),
     outcome.slice(0, 500),
+    approval,
   ]);
+}
+
+export type AuditEntry = { at: string; tool: string; input: unknown; outcome: string; approval: Approval | null };
+
+/**
+ * Every line written during one calendar year in Dutch time. Each line lands
+ * in exactly one year, so the yearly exports together hold the whole log; a
+ * filing in January about December is in the next year's.
+ */
+export async function listAudit(q: Queryable, year: number): Promise<AuditEntry[]> {
+  // 1 January is always winter time in the Netherlands: UTC+1.
+  const rows = await q.query<Omit<AuditEntry, 'at'> & { at: Date | string }>(
+    'select at, tool, input, outcome, approval from audit_log where at >= $1::timestamptz and at < $2::timestamptz order by id',
+    [`${year}-01-01T00:00:00+01:00`, `${year + 1}-01-01T00:00:00+01:00`],
+  );
+  return rows.map((row) => ({ ...row, at: new Date(row.at).toISOString() }));
 }

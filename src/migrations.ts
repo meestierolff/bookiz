@@ -157,4 +157,8 @@ export const MIGRATIONS: string[] = [
   alter table business drop constraint if exists business_vat_period_check;
   alter table business add constraint business_vat_period_check check (vat_period in ('month', 'quarter', 'year'));
   `,
+  // Who said yes to a step that cannot be taken back: the owner in a dialog Bookiz showed, or the assistant's word.
+  `
+  alter table audit_log add column approval text check (approval in ('owner', 'assistant'));
+  `,
 ];

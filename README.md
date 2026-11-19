@@ -160,11 +160,20 @@ instead of corrupting your books. To use several assistants at once, run the
 | `vat_return` | The btw-aangifte for a period, per rubriek |
 | `mark_vat_return_filed` | Freeze a period after you filed it |
 | `year_report` | From turnover to taxable profit, plus the tax indication |
-| `export_books` | Everything for one year |
+| `export_books` | Everything for one year, including the audit log |
 | `get_tax_rules` | The figures in use, with source and quote |
 
-Every change is written to an audit log. Mistakes are corrected with a new
+Every change is written to an audit log, which `export_books` includes for
+the calendar year in which it was written. Mistakes are corrected with a new
 document, never by editing an old one.
+
+Four steps cannot be taken back or leave the building: `finalize_invoice`,
+`credit_invoice`, `send_invoice` and `mark_vat_return_filed`. When the client
+can show a confirmation form (MCP elicitation), Bookiz asks the owner itself,
+with the figures from its own records rather than from the assistant, and
+anything but yes changes nothing. When it cannot, Bookiz relies on the
+assistant having asked, as its instructions say. The audit log records which
+of the two it was.
 
 ## The rules are data
 
@@ -287,6 +296,10 @@ auto-generated web API cannot read them.
   the next return or a suppletie, outside Bookiz.
 - Tested against the MCP SDK client over stdio and HTTP, on embedded and real
   Postgres. Not yet tested against the real claude.ai, ChatGPT and Grok apps.
+- The owner's own confirmation form only works over stdio. Over HTTP (Cloud
+  and the remote server) every request gets a fresh server that cannot hold a
+  question open, so there the assistant's word counts. Which desktop clients
+  show the form has not been tested.
 
 ## Development
 

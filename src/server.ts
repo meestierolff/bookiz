@@ -11,6 +11,7 @@ import { importOpeningState } from './app/switch.ts';
 import { CATEGORIES } from './core/categories.ts';
 import { toCents } from './core/money.ts';
 import { EXPENSE_VAT_TREATMENTS, SALE_VAT_CODES } from './core/types.ts';
+import { type Approval, askOwner } from './approval.ts';
 import { BookizError } from './errors.ts';
 import * as store from './store.ts';
 
@@ -25,6 +26,7 @@ How to work:
 - The engine decides the tax treatment from rules in /rules; you supply facts. If a result surprises you, call get_tax_rules and show the source instead of working around it.
 - Show a draft invoice to the owner and get a yes before finalize_invoice. Final invoices and filed btw periods cannot be changed, only reversed.
 - Ask before send_invoice and before mark_vat_return_filed. Bookiz never files with the Belastingdienst itself.
+- When your client can show a confirmation form, Bookiz also asks the owner itself before finalize_invoice, credit_invoice, send_invoice and mark_vat_return_filed. If the owner says no, nothing changed: ask what should be different.
 - Results are calculations under published rules, not tax advice. Say so when the owner is about to rely on a number for the income tax return.`;
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').describe('Calendar date, YYYY-MM-DD');
@@ -60,6 +62,12 @@ export function createServer(ctx: Ctx): McpServer {
       outbound?: boolean;
       /** Still allowed when the administration is locked, and not worth an audit line. */
       housekeeping?: boolean;
+      /**
+       * Cannot be taken back or leaves the building. Returns the question the
+       * owner must answer with yes, built from what is stored, not from what
+       * the assistant says.
+       */
+      confirm?: (args: z.infer<z.ZodObject<S>>) => Promise<string>;
       meta?: Record<string, unknown>;
     },
     run: (args: z.infer<z.ZodObject<S>>) => Promise<unknown> | unknown,
@@ -78,10 +86,12 @@ export function createServer(ctx: Ctx): McpServer {
         },
         ...(config.meta ? { _meta: config.meta } : {}),
       },
-      (async (args: z.infer<z.ZodObject<S>>) => {
+      (async (args: z.infer<z.ZodObject<S>>, call: { signal: AbortSignal; requestId: string | number }) => {
         let outcome = 'ok';
+        let approval: Approval | null = null;
         try {
           if (ctx.locked && !config.readOnly && !config.housekeeping) throw new BookizError(ctx.locked);
+          if (config.confirm) approval = await askOwner(server.server, await config.confirm(args), call);
           const result = await run(args);
           return { content: [{ type: 'text' as const, text: JSON.stringify(inEuros(result), null, 2) }] };
         } catch (error) {
@@ -98,7 +108,7 @@ export function createServer(ctx: Ctx): McpServer {
           if (!config.readOnly && !config.housekeeping) {
             // The audit trail must never contain the document itself.
             const { content_base64: _omitted, ...logged } = args as Record<string, unknown>;
-            await store.logAudit(ctx.db, name, logged, outcome).catch((e) => console.error('[bookiz] audit failed', e));
+            await store.logAudit(ctx.db, name, logged, outcome, approval).catch((e) => console.error('[bookiz] audit failed', e));
           }
         }
       }) as never,
@@ -249,6 +259,7 @@ export function createServer(ctx: Ctx): McpServer {
         'Turn a draft into a final invoice: it gets the next consecutive number, a PDF, and counts for btw and profit. This cannot be undone, only reversed with credit_invoice. Only call after the owner approved the draft.',
       changes: true,
       input: { draft_id: z.number().int() },
+      confirm: ({ draft_id }) => invoices.finalizeQuestion(ctx, draft_id),
     },
     ({ draft_id }) => invoices.finalizeInvoice(ctx, draft_id),
   );
@@ -265,6 +276,7 @@ export function createServer(ctx: Ctx): McpServer {
         to: z.email().optional().describe('Overrides the customer e-mail address'),
         message: z.string().max(4000).optional().describe('Plain-text body; a polite Dutch default is used when omitted'),
       },
+      confirm: (args) => invoices.sendQuestion(ctx, args),
     },
     (args) => invoices.sendInvoice(ctx, args),
   );
@@ -288,6 +300,7 @@ export function createServer(ctx: Ctx): McpServer {
         'Reverse a final invoice with a creditfactuur dated today. Use this for any mistake on a final invoice, then create a correct new one.',
       changes: true,
       input: { number: z.string(), reason: z.string().max(500).optional() },
+      confirm: (args) => invoices.creditQuestion(ctx, args),
     },
     (args) => invoices.creditInvoice(ctx, args),
   );
@@ -500,6 +513,7 @@ Refuses a likely duplicate unless allow_duplicate is true. Afterwards, store the
         'Record that the owner filed the btw-aangifte for a period. This freezes the figures and locks the period. Only call after the owner confirms the filing was actually submitted.',
       changes: true,
       input: { period: z.string(), filed_on: date.optional() },
+      confirm: (args) => reports.filingQuestion(ctx, args),
     },
     (args) => reports.markVatReturnFiled(ctx, args),
   );
@@ -521,7 +535,7 @@ Refuses a likely duplicate unless allow_duplicate is true. Afterwards, store the
     {
       title: 'Administratie exporteren',
       description:
-        'Everything for one year as JSON: business profile, invoices, expenses with receipt hashes, filed btw returns, the year report and the tax rules used. For a bookkeeper, a backup, or leaving Bookiz.',
+        'Everything for one year as JSON: business profile, invoices, expenses with receipt hashes, filed btw returns, the year report, the tax rules used, and the audit log of every change made during that calendar year (Dutch time) with who confirmed it. For a bookkeeper, a backup, or leaving Bookiz.',
       input: { year: z.number().int() },
       readOnly: true,
     },
