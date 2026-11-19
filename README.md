@@ -60,7 +60,8 @@ Bookiz is the opposite bet:
 - **Yours to leave.** Self-host it for free, export everything as one file.
 
 > **Status: 0.1, early.** The engine is tested but has run no real
-> administration yet. It calculates; it does not file with the Belastingdienst
+> administration yet; [docs/PARALLEL-RUN.md](docs/PARALLEL-RUN.md) is how it
+> gets proven on one. It calculates; it does not file with the Belastingdienst
 > and it is not tax advice. Rules are complete for **2026**; 2027 is open for
 > booking on provisional rules until the Belastingdienst publishes the rest.
 
