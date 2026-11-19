@@ -87,22 +87,24 @@ export async function findAccount(control: Db, userId: string): Promise<Account 
 /**
  * The account for a signed-in user, created on first use with an empty
  * administration and a trial. `user.id` must come from a verified token.
+ * `created` is set only on the request that made the account.
  */
-export async function ensureAccount(connect: Connector, env: CloudEnv, user: { id: string; email: string }): Promise<Account> {
+export async function ensureAccount(connect: Connector, env: CloudEnv, user: { id: string; email: string }): Promise<Account & { created?: true }> {
   const control = await connect();
   try {
     // An assistant often opens with several requests at once. One of them creates
     // the administration; the others wait here instead of creating it too.
     await control.query('select pg_advisory_lock(hashtext($1))', [`bookiz-account:${user.id}`]);
-    let account = await findAccount(control, user.id);
+    let account: (Account & { created?: true }) | null = await findAccount(control, user.id);
     if (!account) {
       const tenant = randomBytes(10).toString('hex');
-      await control.query(
+      const inserted = await control.query(
         `insert into bookiz_cloud.account (user_id, email, tenant, trial_ends_at)
-         values ($1, $2, $3, now() + make_interval(days => $4)) on conflict (user_id) do nothing`,
+         values ($1, $2, $3, now() + make_interval(days => $4)) on conflict (user_id) do nothing returning user_id`,
         [user.id, user.email, tenant, env.trialDays],
       );
       account = (await findAccount(control, user.id)) as Account;
+      if (inserted.length > 0) account = { ...account, created: true };
     }
     if (account.schema_version < SCHEMA_VERSION) {
       await control.exec(`create schema if not exists ${tenantSchema(account.tenant)}`);

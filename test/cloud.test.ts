@@ -7,7 +7,7 @@ import * as expenses from '../src/app/expenses.ts';
 import * as invoices from '../src/app/invoices.ts';
 import * as reports from '../src/app/reports.ts';
 import type { CloudEnv } from '../src/cloud/env.ts';
-import { type Cloud, checkoutUrl, handle, verifyStripeSignature } from '../src/cloud/handler.ts';
+import { accountFor, type Cloud, checkoutUrl, handle, verifyStripeSignature } from '../src/cloud/handler.ts';
 import { loginPage, messagePage } from '../src/cloud/pages.ts';
 import type { Mail } from '../src/mail.ts';
 import { type Account, accessOf, type Connector, ensureAccount, findAccount, isAdmin, tenantConfig, tenantSchema, withTenant } from '../src/cloud/tenants.ts';
@@ -381,4 +381,27 @@ test('Bookiz Cloud pages count no visits; only the public site does', () => {
   for (const html of [loginPage('nonce', { next: '/app' }), messagePage('nonce', 'Klaar', 'Gelukt.')]) {
     assert.doesNotMatch(html, /_vercel\/insights/);
   }
+});
+
+test('the operator hears of each new Cloud account once, and a failed notice never blocks signing in', async () => {
+  const { cloud, raw, sent } = await embeddedCloud();
+  await raw.exec((await import('../src/cloud/tenants.ts')).CONTROL_SCHEMA);
+
+  await accountFor(cloud, alice);
+  assert.deepEqual(
+    sent.map((m) => [m.to, m.subject]),
+    [['ops@bookiz.test', 'Nieuw Bookiz Cloud-account']],
+  );
+  assert.match(sent[0]?.text ?? '', /^alice@example\.test heeft een Bookiz Cloud-account aangemaakt\. De proefperiode loopt tot \d{1,2} \S+ \d{4}\./);
+
+  await accountFor(cloud, alice);
+  assert.equal(sent.length, 1, 'signing in again is not a new account');
+
+  const mailDown: Cloud = {
+    ...cloud,
+    mail: async () => {
+      throw new Error('smtp down');
+    },
+  };
+  assert.equal((await accountFor(mailDown, bob)).email, bob.email);
 });

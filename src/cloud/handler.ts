@@ -42,6 +42,31 @@ import {
 
 export type Cloud = { env: CloudEnv; connect: Connector; mail: Mailer; now: () => Date };
 
+/**
+ * The signed-in user's account. A new one is reported to the operator, who
+ * writes to each person starting a trial to help them get going.
+ */
+export async function accountFor(cloud: Cloud, user: { id: string; email: string }): Promise<Account> {
+  const account = await ensureAccount(cloud.connect, cloud.env, user);
+  if (account.created && cloud.env.operatorEmail) {
+    const trialEnds = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'long', year: 'numeric' }).format(
+      new Date(account.trial_ends_at),
+    );
+    // Never at the cost of signing in: a failed notice is only logged.
+    await cloud
+      .mail({
+        to: cloud.env.operatorEmail,
+        subject: 'Nieuw Bookiz Cloud-account',
+        text:
+          `${account.email} heeft een Bookiz Cloud-account aangemaakt. De proefperiode loopt tot ${trialEnds}.\n\n` +
+          'Een persoonlijk bericht om op weg te helpen kan nu. Geen reclame zonder toestemming; zo staat het in de privacyverklaring.',
+        attachments: [],
+      })
+      .catch((error) => console.error('[bookiz] sign-up notice failed', error));
+  }
+  return account;
+}
+
 let ready: Promise<void> | undefined;
 
 export function createCloud(env: CloudEnv = loadCloudEnv()): Cloud {
@@ -212,12 +237,12 @@ async function mcp(cloud: Cloud, req: IncomingMessage, res: ServerResponse): Pro
     res.end(JSON.stringify({ error: 'unauthorized', error_description: 'Sign in to Bookiz to use this server.' }));
     return;
   }
-  const account = await ensureAccount(cloud.connect, cloud.env, user);
+  const account = await accountFor(cloud, user);
   await withTenant(cloud.connect, cloud.env, account, cloud.mail, (ctx) => handleMcp(ctx, req, res), cloud.now);
 }
 
 async function dashboard(cloud: Cloud, req: IncomingMessage, res: ServerResponse, session: Session): Promise<void> {
-  const account = await ensureAccount(cloud.connect, cloud.env, session.user);
+  const account = await accountFor(cloud, session.user);
   const access = accessOf(account, cloud.env, cloud.now());
   const data = await withTenant(
     cloud.connect,
@@ -360,7 +385,7 @@ async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url:
 
   if (page === 'betalen' && req.method === 'GET') {
     const plan: Plan = url.searchParams.get('plan') === 'dfy' ? 'dfy' : 'cloud';
-    const account = await ensureAccount(cloud.connect, cloud.env, session.user);
+    const account = await accountFor(cloud, session.user);
     return redirect(res, checkoutUrl(cloud, account, plan) ?? '/app');
   }
 
@@ -370,7 +395,7 @@ async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url:
     // Read from fixed lists: the rewrite to this function adds query parameters of its own.
     const format = (['json', 'xlsx', 'csv'] as const).find((f) => f === url.searchParams.get('format')) ?? 'json';
     const tab = (['inkomsten', 'uitgaven'] as const).find((t) => t === url.searchParams.get('tab')) ?? 'uitgaven';
-    const account = await ensureAccount(cloud.connect, cloud.env, session.user);
+    const account = await accountFor(cloud, session.user);
     if (format === 'json') {
       const data = await withTenant(cloud.connect, cloud.env, account, cloud.mail, (ctx) => reports.exportBooks(ctx, { year }), cloud.now);
       return send(res, 200, JSON.stringify(data, null, 2), 'application/json; charset=utf-8', {
