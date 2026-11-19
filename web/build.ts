@@ -139,6 +139,7 @@ function page(options: { path: string; title: string; description: string; body:
 ${(options.jsonLd ?? []).map((data) => `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`).join('\n')}
 ${options.data ? `<script type="application/json" id="bz-data">${options.data}</script>` : ''}
 <script src="/site.js" defer></script>
+<script src="/_vercel/insights/script.js" defer></script>
 </head>
 <body>
 ${header(onHome)}

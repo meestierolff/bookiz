@@ -62,7 +62,8 @@ export function privacy(company: Company): string {
     {
       title: '3. Welke gegevens leggen we vast?',
       body: [
-        p('<strong>Als je de website bezoekt.</strong> De openbare pagina’s plaatsen geen cookies en bevatten geen scripts of meetpixels. Log je in op Bookiz Cloud, dan plaatsen we twee functionele cookies om je ingelogd te houden; verder niets. Onze hostingpartij verwerkt technische verbindingsgegevens, zoals je IP-adres, om de pagina te kunnen tonen en misbruik te weren.'),
+        p('<strong>Als je de website bezoekt.</strong> De openbare pagina’s plaatsen geen cookies en bevatten geen advertentie- of volgscripts. Om te zien hoeveel mensen de site bezoeken en welke pagina’s ze lezen, gebruiken we Vercel Web Analytics. Dat telt bezoeken zonder cookies. Per paginabezoek legt het vast: het tijdstip, de pagina, de website waar je vandaan kwam, je land, regio en stad, en je soort apparaat, besturingssysteem en browser. Een bezoeker wordt herkend aan een code die uit het binnenkomende verzoek wordt berekend en die na 24 uur wordt weggegooid. Wij zien alleen totalen, niet wie je bent, en je wordt niet over andere websites gevolgd.'),
+        p('Log je in op Bookiz Cloud, dan plaatsen we twee functionele cookies om je ingelogd te houden; verder niets, en daar meten we geen bezoeken. Onze hostingpartij verwerkt technische verbindingsgegevens, zoals je IP-adres, om de pagina te kunnen tonen en misbruik te weren.'),
         p('<strong>Als je contact opneemt.</strong> Je e-mailadres, je naam en wat je ons schrijft, om je te kunnen antwoorden.'),
         p('<strong>Als je betaalt.</strong> Je naam, e-mailadres, factuuradres en eventueel btw-nummer, via onze betaalprovider. Kaart- of bankgegevens zien wij niet.'),
         p('<strong>Als je Bookiz Cloud gebruikt.</strong> Je e-mailadres om in te loggen, je bedrijfsgegevens (naam, adres, KvK-nummer, btw-nummer, IBAN) en de administratie die je via je assistent invoert: facturen, uitgaven, relaties en aangiftes. Daarnaast een logboek van wijzigingen, zodat je kunt nagaan wat wanneer is geboekt.'),
@@ -81,7 +82,7 @@ export function privacy(company: Company): string {
         list([
           'Om de overeenkomst met jou uit te voeren: de dienst leveren, factureren en ondersteunen.',
           'Omdat de wet het eist: onze eigen administratie bewaren we zeven jaar.',
-          'Vanwege ons gerechtvaardigd belang: de dienst veilig en werkend houden.',
+          'Vanwege ons gerechtvaardigd belang: de dienst veilig en werkend houden, en met bezoekstatistieken zonder cookies zien hoe de website wordt gebruikt.',
         ]),
         p('We versturen geen reclame zonder je toestemming, en we verkopen of verhuren je gegevens nooit.'),
       ],
@@ -91,7 +92,7 @@ export function privacy(company: Company): string {
       body: [
         list([
           '<strong>Supabase</strong>: database en inloggen. De gegevens staan in de Europese Unie (Frankfurt).',
-          '<strong>Vercel</strong>: hosting van de website en de server.',
+          '<strong>Vercel</strong>: hosting van de website en de server, en de bezoekstatistieken van de website (Vercel Web Analytics).',
           '<strong>Brevo</strong>: verzenden van e-mail, zoals facturen aan je klanten en bonnen naar je eigen mailbox.',
           '<strong>Stripe</strong>: betalingen voor je abonnement.',
         ]),
