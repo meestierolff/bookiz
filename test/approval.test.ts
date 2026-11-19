@@ -166,6 +166,14 @@ test('over stateless HTTP Bookiz cannot hold a question open, so it falls back t
   }
 });
 
+test('a receipt upload still logs on a tenant that has not been migrated since the approval column', async () => {
+  const ctx = await makeCtx();
+  await ctx.db.query('alter table audit_log drop column approval');
+  await store.logAudit(ctx.db, 'upload_receipt', { ref: 'K2026-001', bytes: 68 }, 'ok');
+  const rows = await ctx.db.query<{ tool: string }>('select tool from audit_log');
+  assert.deepEqual(rows.map((row) => row.tool), ['upload_receipt']);
+});
+
 test('the export carries the audit log of its own calendar year, as it was written', async () => {
   const ctx = await makeCtx();
   await seed(ctx);

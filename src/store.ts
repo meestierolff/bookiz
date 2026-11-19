@@ -363,12 +363,14 @@ export async function claimDaily(tx: Queryable, kind: string, limit: number, det
 }
 
 export async function logAudit(q: Queryable, tool: string, input: unknown, outcome: string, approval: Approval | null = null): Promise<void> {
-  await q.query('insert into audit_log (tool, input, outcome, approval) values ($1, $2::jsonb, $3, $4)', [
-    tool,
-    JSON.stringify(input ?? {}),
-    outcome.slice(0, 500),
-    approval,
-  ]);
+  const values = [tool, JSON.stringify(input ?? {}), outcome.slice(0, 500)];
+  // A Cloud tenant is migrated when its owner signs in, but a signed receipt link
+  // can be used before that; a line without an approval must not need the column.
+  if (approval === null) {
+    await q.query('insert into audit_log (tool, input, outcome) values ($1, $2::jsonb, $3)', values);
+    return;
+  }
+  await q.query('insert into audit_log (tool, input, outcome, approval) values ($1, $2::jsonb, $3, $4)', [...values, approval]);
 }
 
 export type AuditEntry = { at: string; tool: string; input: unknown; outcome: string; approval: Approval | null };
