@@ -25,7 +25,8 @@ import {
 } from './auth.ts';
 import { type CloudEnv, loadCloudEnv } from './env.ts';
 import { bookkeeperSheets, toCsv, toXlsx } from '../app/spreadsheet.ts';
-import { codePage, consentPage, dashboardPage, forwardPage, loginMail, loginPage, messagePage } from './pages.ts';
+import { businessPage, codePage, consentPage, dashboardPage, forwardPage, loginMail, loginPage, messagePage } from './pages.ts';
+import { businessFormState, saveBusinessForm } from '../app/business-form.ts';
 import {
   ACCOUNT_COLUMNS,
   type Account,
@@ -259,6 +260,7 @@ async function dashboard(cloud: Cloud, req: IncomingMessage, res: ServerResponse
         overview: (await reports.overview(ctx)) as Record<string, unknown>,
         missing: expenses.slice(0, 20).map((e) => ({ ref: e.ref, vendor: e.vendor, date: e.date, link: uploadLink(ctx.config, e.ref) })),
         years: [...years].filter((year) => availableYears().includes(year)).sort(),
+        business: { details: await store.getBusiness(ctx.db), form: await businessFormState(ctx, account.email) },
       };
     },
     cloud.now,
@@ -278,6 +280,7 @@ async function dashboard(cloud: Cloud, req: IncomingMessage, res: ServerResponse
       overview: data.overview,
       missingReceipts: data.missing,
       years: data.years,
+      business: data.business,
     }),
   );
 }
@@ -415,6 +418,28 @@ async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url:
     const clientId = (await form(req)).get('client_id') ?? '';
     if (/^[\w-]{1,200}$/.test(clientId)) await (await supabaseFor(cloud, session)).auth.oauth.revokeGrant({ clientId });
     return redirect(res, '/app');
+  }
+  if (page === 'bedrijf' && req.method === 'GET') {
+    const account = await accountFor(cloud, session.user);
+    const state = await withTenant(cloud.connect, cloud.env, account, cloud.mail, (ctx) => businessFormState(ctx, account.email), cloud.now);
+    return sendHtml(res, 200, (nonce) => businessPage(nonce, { values: state.values, errors: {}, fixed: state.fixed }));
+  }
+  if (page === 'bedrijf' && req.method === 'POST') {
+    const fields = await form(req);
+    const account = await accountFor(cloud, session.user);
+    const outcome = await withTenant(
+      cloud.connect,
+      cloud.env,
+      account,
+      cloud.mail,
+      async (ctx) => {
+        const saved = await saveBusinessForm(ctx, fields);
+        return saved.ok ? saved : { ...saved, fixed: (await businessFormState(ctx, account.email)).fixed };
+      },
+      cloud.now,
+    );
+    if (outcome.ok) return redirect(res, '/app');
+    return sendHtml(res, 400, (nonce) => businessPage(nonce, { values: outcome.values, errors: outcome.errors, fixed: outcome.fixed, message: outcome.message }));
   }
   if (page === '' && req.method === 'GET') return dashboard(cloud, req, res, session);
   return send(res, 404, 'Niet gevonden.');
