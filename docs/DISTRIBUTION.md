@@ -35,7 +35,7 @@ reply may say; the right column is its source or the proof still missing.
 | Cloud € 99 per year excl. btw, first 30 days free; self-host free | True: `web/site.json`, open |
 | Done for you € 399 per year excl. btw for the first 50, then € 499 | True: `web/site.json`, presale |
 | "Works with assistants that support remote MCP servers" | True |
-| "Works with Claude" | **Needs proof:** the owner connects the Claude app on a phone to `https://boekiehouder.nl/mcp` and books one receipt with a photo |
+| "Works with Claude" | True since 21 November 2026: the owner booked K2026-001 with a photo through Claude on the live server. The original goes in once more through the upload link, because Claude does not hand files to a remote server |
 | "Install it yourself in Claude Code" | **Needs proof:** one `finalize_invoice` in Claude Code against a throwaway data folder (also tests the new confirmation form) |
 | "Switch from Moneybird and carry on" | **Needs proof:** one real Moneybird export through `import_opening_state`, outstanding amount checked. Until then: "overstappen kan per 1 januari of per kwartaal; zie boekiehouder.nl/overstappen" |
 | Customers, reviews, time saved, accuracy | **None exist.** Do not say or imply any |
@@ -72,7 +72,7 @@ Prepared in `docs/DIRECTORIES.md`; each needs the owner's own login.
 | --- | --- | --- |
 | Official MCP Registry | `server.json` validated on 19 November 2026 | `mcp-publisher login github`, then `mcp-publisher publish` |
 | Glama, PulseMCP | Follow the registry automatically | None |
-| Claude Connectors Directory | Texts in `docs/DIRECTORIES.md` | Submit at claude.ai/directory/manage (paid Claude plan); after the phone test |
+| Claude Connectors Directory | Texts in `docs/DIRECTORIES.md` | Submit at claude.ai/directory/manage (paid Claude plan); the phone test is done |
 | mcpservers.org | Free form | Submit at mcpservers.org/submit |
 | awesome-remote-mcp-servers | Pull request | After the Glama listing |
 | ChatGPT Directory | Blocked | Needs a review login without e-mail codes; decide later |
@@ -210,14 +210,14 @@ About three hours a week (owner, 19 November 2026).
 
 | When | Owner step | Why |
 | --- | --- | --- |
-| Week 1 | Phone test: book one receipt through the Claude app on the live server | Unlocks "werkt met Claude" in every draft below |
+| Week 1 | ~~Phone test~~ done on 21 November 2026 | "Werkt met Claude" may be used |
 | Week 1 | Claude Code test: one `finalize_invoice` against a throwaway data folder | Unlocks the self-host call to action and the r/mcp post |
 | Week 1 | MCP Registry publish; mcpservers.org form | Listings that work without an audience |
 | Week 1 | Send drafts 1, 2 and 3 (ask the mods and the Tweakers crew) | The megathreads and Tweakers need a yes first |
 | Week 1 | Three hand-written answers from the thread lists, without the name | Karma, a history, and the language of the customer |
 | Week 2 | Draft 4 in the r/ondernemen promo thread (once) | The one place that allows it without asking |
 | Week 2 | Drafts 4 adapted for the megathreads where a mod said yes | |
-| Week 2 | Claude Connectors Directory submission | After the phone test |
+| Week 2 | Claude Connectors Directory submission | Ready to submit |
 | Week 2 | Draft 6 on r/mcp | After the Claude Code test |
 | End of week 2 | Fill the log; read referrers, sign-ups, Stripe, GitHub | Decide: more of what brought a visit, sign-up or conversation |
 
@@ -270,8 +270,10 @@ owner rewrites it in his own words (house rule 3).
 
 ### 4. Promo entry for r/ondernemen (and, adapted, the megathreads)
 
-Value: an honest description the reader can check. When: after the phone
-test. Approver: Mees. Links carry `?utm_source=reddit-<sub>`.
+Value: an honest description the reader can check. When: now (phone test done
+21 November 2026, onboarding from the landing page live). Approver: Mees, who
+posts it himself and makes it his own words. Links carry
+`?utm_source=reddit-<sub>`.
 
 > **Bookiz: boekhouding voor eenmanszaken met weinig facturen.** Ik ben de
 > maker.
@@ -290,12 +292,17 @@ test. Approver: Mees. Links carry `?utm_source=reddit-<sub>`.
 > de Belastingdienst waar hij vandaan komt. Die bronnen worden elke nacht
 > gecontroleerd.
 >
-> Eerlijk: het is versie 0.1 en er zijn nog geen klanten. Zelf hosten is
-> gratis; de gehoste versie kost € 99 per jaar excl. btw, de eerste 30 dagen
-> gratis. Het verdienmodel is dat abonnement; je bonnen bewaart Bookiz niet,
-> die gaan naar je eigen mailbox.
+> Beginnen: op boekiehouder.nl op "Start gratis", inloggen met een code per
+> mail, je bedrijfsgegevens één keer invullen en het adres kopiëren naar
+> Claude. Daarna gaat alles via Claude.
 >
-> boekiehouder.nl
+> Eerlijk: het is versie 0.1 en er zijn nog geen klanten. Een bonfoto leest
+> Claude uit; het origineel upload je één keer via een link, dan staat het in
+> je eigen mailbox. Zelf hosten is gratis; de gehoste versie kost € 99 per jaar
+> excl. btw, de eerste 30 dagen gratis, zonder betaalgegevens. Het verdienmodel
+> is dat abonnement; je bonnen bewaart Bookiz niet.
+>
+> boekiehouder.nl/?utm_source=reddit-ondernemen
 
 ### 5. Facts for answers about the KOR and the btw-aangifte
 
