@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { Ctx } from './app/context.ts';
 import { inEuros, todayOf } from './app/context.ts';
-import { setupBusiness } from './app/business.ts';
+import { IBAN, KVK_NUMBER, setupBusiness, VAT_ID } from './app/business.ts';
 import * as expenses from './app/expenses.ts';
 import * as invoices from './app/invoices.ts';
 import * as recurring from './app/recurring.ts';
@@ -140,9 +140,9 @@ export function createServer(ctx: Ctx): McpServer {
         address_line: optionalText,
         postal_code: optionalText,
         city: optionalText,
-        kvk_number: z.string().regex(/^\d{8}$/, 'KvK-nummer is 8 digits').optional(),
-        vat_id: z.string().regex(/^NL\d{9}B\d{2}$/, 'Dutch btw-id looks like NL123456789B01').optional(),
-        iban: z.string().regex(/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/, 'IBAN without spaces').optional(),
+        kvk_number: z.string().regex(KVK_NUMBER, 'KvK-nummer is 8 digits').optional(),
+        vat_id: z.string().regex(VAT_ID, 'Dutch btw-id looks like NL123456789B01').optional(),
+        iban: z.string().regex(IBAN, 'IBAN without spaces').optional(),
         email: z.email().optional().describe('Shown on invoices; receives a copy of every sent invoice'),
         archive_email: z.email().optional().describe('Mailbox that receives receipts as its archive; defaults to email'),
         kor_since: date.nullable().optional(),

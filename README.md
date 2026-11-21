@@ -242,6 +242,12 @@ the engine is pointed at one schema and cannot name another. `scripts/cloud-e2e.
 checks the whole flow against a deployment, including that two customers see
 nothing of each other.
 
+A new customer fills in the business details once, in a form on `/app` that
+saves through the same rules as `setup_business`; the assistant takes over
+from a complete profile. Once anything is booked, the filing frequency and
+the KOR are fixed in that form: the filing frequency cannot change any more,
+and ending the KOR goes through the assistant.
+
 ### Remote server
 
 For assistants that do not run on your computer:

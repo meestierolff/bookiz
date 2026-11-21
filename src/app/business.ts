@@ -5,6 +5,11 @@ import type { Business } from '../core/types.ts';
 import * as store from '../store.ts';
 import type { Ctx } from './context.ts';
 
+/** Shared by the setup_business tool and the dashboard form, so the two accept the same values. */
+export const KVK_NUMBER = /^\d{8}$/;
+export const VAT_ID = /^NL\d{9}B\d{2}$/;
+export const IBAN = /^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/;
+
 /**
  * Update the business profile. Two settings decide how existing documents are
  * treated, so they may not change underneath them: the KOR period and the

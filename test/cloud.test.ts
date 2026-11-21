@@ -8,7 +8,9 @@ import * as invoices from '../src/app/invoices.ts';
 import * as reports from '../src/app/reports.ts';
 import type { CloudEnv } from '../src/cloud/env.ts';
 import { accountFor, type Cloud, checkoutUrl, handle, verifyStripeSignature } from '../src/cloud/handler.ts';
-import { loginPage, messagePage } from '../src/cloud/pages.ts';
+import { businessPage, dashboardPage, loginPage, messagePage } from '../src/cloud/pages.ts';
+import { formValuesOf } from '../src/app/business-form.ts';
+import type { Business } from '../src/core/types.ts';
 import type { Mail } from '../src/mail.ts';
 import { type Account, accessOf, type Connector, ensureAccount, findAccount, isAdmin, tenantConfig, tenantSchema, withTenant } from '../src/cloud/tenants.ts';
 import { type Db, openEmbedded, SCHEMA_VERSION } from '../src/db.ts';
@@ -404,4 +406,81 @@ test('the operator hears of each new Cloud account once, and a failed notice nev
     },
   };
   assert.equal((await accountFor(mailDown, bob)).email, bob.email);
+});
+
+const someone: Account = {
+  user_id: alice.id,
+  email: 'alice@example.test',
+  tenant: '0123456789abcdef0123',
+  status: 'trial',
+  plan: 'cloud',
+  trial_ends_at: '2026-12-16T10:00:00.000Z',
+  paid_until: null,
+  stripe_customer_id: null,
+  schema_version: SCHEMA_VERSION,
+  created_at: '2026-11-16T10:00:00.000Z',
+};
+const page = (overview: Record<string, unknown>, details: Business | null, fixed = false) =>
+  dashboardPage('nonce', {
+    account: someone,
+    access: true,
+    mcpUrl: 'https://bookiz.test/mcp',
+    checkout: { cloud: true, dfy: true },
+    overview,
+    missingReceipts: [],
+    years: [2026],
+    grants: [],
+    business: { details, form: { values: formValuesOf(details, someone.email), fixed } },
+  });
+
+test('a new customer sees the business form before the assistant', () => {
+  const html = page({ setup: 'nog niet ingericht', next_actions: [] }, null);
+  assert.ok(html.includes('action="/app/bedrijf"'));
+  assert.ok(html.includes('Kies dit goed: na je eerste boeking kan het niet meer wijzigen.'));
+  assert.ok(html.includes('value="alice@example.test"'));
+  assert.ok(!html.includes('nog leeg'));
+  assert.ok(html.indexOf('Je bedrijf') < html.indexOf('Koppel je AI-assistent'));
+});
+
+test('a set-up customer sees the details and where to change them', () => {
+  const details: Business = {
+    name: 'Studio Voorbeeld',
+    owner_name: null,
+    address_line: 'Dorpsstraat 1',
+    postal_code: '1234 AB',
+    city: 'Utrecht',
+    kvk_number: '12345678',
+    vat_id: 'NL123456789B01',
+    iban: 'NL91ABNA0417164300',
+    email: 'alice@example.test',
+    archive_email: null,
+    kor_since: null,
+    kor_until: null,
+    vat_period: 'year',
+    payment_term_days: 30,
+    books_start: null,
+  };
+  const html = page({ business: 'Studio Voorbeeld', btw: {}, invoices: {}, next_actions: [] }, details);
+  assert.ok(html.includes('12345678'));
+  assert.ok(html.includes('per jaar'));
+  assert.ok(html.includes('Iets wijzigen? Zeg het tegen je assistent'));
+  assert.ok(html.includes('href="/app/bedrijf"'));
+  assert.ok(!html.includes('<form method="post" action="/app/bedrijf"'));
+});
+
+test('errors re-render escaped with the entered values', () => {
+  const values = { ...formValuesOf(null, someone.email), name: '<b>Studio</b>' };
+  const html = businessPage('nonce', { values, errors: { kvk_number: 'Een KvK-nummer heeft 8 cijfers.' }, fixed: false });
+  assert.ok(html.includes('&lt;b&gt;Studio&lt;/b&gt;'));
+  assert.ok(html.includes('Een KvK-nummer heeft 8 cijfers.'));
+  assert.ok(!html.includes('<b>Studio</b>'));
+});
+
+test('a fixed form has no period or KOR inputs', () => {
+  const html = businessPage('nonce', { values: formValuesOf(null, someone.email), errors: {}, fixed: true });
+  assert.ok(!html.includes('name="vat_period"'));
+  assert.ok(!html.includes('name="kor"'));
+  // The engine refuses a period change once anything is booked, through the assistant too.
+  assert.ok(html.includes('Dit staat vast sinds je eerste boeking.'));
+  assert.ok(!html.includes('Dit staat vast sinds je eerste boeking; wijzigen via je assistent'));
 });
