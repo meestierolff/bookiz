@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formValuesOf, parseBusinessForm } from '../src/app/business-form.ts';
+import { businessFormState, formValuesOf, parseBusinessForm, saveBusinessForm } from '../src/app/business-form.ts';
+import * as expenses from '../src/app/expenses.ts';
+import * as store from '../src/store.ts';
+import { makeCtx, seed } from './helpers.ts';
 
 const complete = {
   name: 'Studio Voorbeeld',
@@ -72,4 +75,48 @@ test('a fixed form of a KOR business saves without a btw-id', () => {
   const parsed = parseBusinessForm(fields(rest));
   assert.ok('patch' in parsed, JSON.stringify(parsed));
   assert.equal('vat_id' in parsed.patch, false, 'an empty btw-id leaves the stored one alone');
+});
+
+async function lastAudit(ctx: Awaited<ReturnType<typeof makeCtx>>) {
+  const rows = await ctx.db.query<{ tool: string; outcome: string; approval: string | null }>('select tool, outcome, approval from audit_log order by id desc limit 1');
+  return rows[0];
+}
+
+test('the form saves the business and the audit log says the owner did it', async () => {
+  const ctx = await makeCtx();
+  assert.deepEqual(await saveBusinessForm(ctx, fields(complete)), { ok: true });
+  assert.equal((await store.getBusiness(ctx.db))?.kvk_number, '12345678');
+  assert.deepEqual(await lastAudit(ctx), { tool: 'setup_business', outcome: 'ok', approval: 'owner' });
+});
+
+test('a locked administration saves nothing', async () => {
+  const ctx = await makeCtx();
+  ctx.locked = 'Je proefperiode is afgelopen.';
+  const result = await saveBusinessForm(ctx, fields(complete));
+  assert.equal(result.ok, false);
+  assert.equal(!result.ok && result.message, 'Je proefperiode is afgelopen.');
+  assert.equal(!result.ok && result.values.name, 'Studio Voorbeeld');
+  assert.equal(await store.getBusiness(ctx.db), null);
+  assert.equal(await lastAudit(ctx), undefined);
+});
+
+test("the engine's own refusal reaches the form", async () => {
+  const ctx = await makeCtx();
+  await seed(ctx);
+  await expenses.recordExpense(ctx, { date: '2026-11-10', vendor: 'NS', amount: 21.8, vat_amount: 1.8, category: 'reiskosten' });
+  const result = await saveBusinessForm(ctx, fields({ ...complete, vat_period: 'month' }));
+  assert.equal(result.ok, false);
+  assert.match((!result.ok && result.message) || '', /Het aangiftetijdvak kan niet meer wijzigen/);
+  assert.equal((await store.getBusiness(ctx.db))?.vat_period, 'quarter');
+  assert.match((await lastAudit(ctx))?.outcome ?? '', /^error: /);
+});
+
+test('the form is fixed once there are bookings', async () => {
+  const ctx = await makeCtx();
+  await seed(ctx);
+  assert.equal((await businessFormState(ctx, 'sam@voorbeeld.test')).fixed, false);
+  await expenses.recordExpense(ctx, { date: '2026-11-10', vendor: 'NS', amount: 21.8, vat_amount: 1.8, category: 'reiskosten' });
+  const state = await businessFormState(ctx, 'sam@voorbeeld.test');
+  assert.equal(state.fixed, true);
+  assert.equal(state.values.kvk_number, '12345678');
 });

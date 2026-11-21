@@ -1,5 +1,8 @@
 import type { Business } from '../core/types.ts';
-import { IBAN, KVK_NUMBER, VAT_ID } from './business.ts';
+import { BookizError } from '../errors.ts';
+import * as store from '../store.ts';
+import { IBAN, KVK_NUMBER, setupBusiness, VAT_ID } from './business.ts';
+import type { Ctx } from './context.ts';
 
 /**
  * The business details as a Cloud customer fills them in on /app, once, before
@@ -131,4 +134,37 @@ export function parseBusinessForm(
   }
 
   return Object.keys(errors).length > 0 ? { values, errors } : { patch };
+}
+
+/** The form as it should open: prefilled, and with the period and KOR fixed once anything is booked. */
+export async function businessFormState(ctx: Ctx, signInEmail: string): Promise<{ values: BusinessFormValues; fixed: boolean }> {
+  const business = await store.getBusiness(ctx.db);
+  const booked =
+    (await store.listInvoices(ctx.db)).some((invoice) => invoice.status === 'final') ||
+    (await store.listExpenses(ctx.db)).some((expense) => !expense.voided_at) ||
+    (await store.listFilings(ctx.db)).length > 0;
+  return { values: formValuesOf(business, signInEmail), fixed: booked };
+}
+
+/**
+ * Save what the owner typed in the dashboard. The engine has the last word:
+ * whatever setupBusiness refuses comes back as the message, and nothing changes.
+ */
+export async function saveBusinessForm(
+  ctx: Ctx,
+  fields: URLSearchParams,
+): Promise<{ ok: true } | { ok: false; values: BusinessFormValues; errors: BusinessFormErrors; message?: string }> {
+  if (ctx.locked) return { ok: false, values: valuesFrom(fields), errors: {}, message: ctx.locked };
+  const parsed = parseBusinessForm(fields);
+  if ('errors' in parsed) return { ok: false, values: parsed.values, errors: parsed.errors };
+  try {
+    await setupBusiness(ctx, parsed.patch);
+  } catch (error) {
+    if (!(error instanceof BookizError)) throw error;
+    await store.logAudit(ctx.db, 'setup_business', parsed.patch, `error: ${error.message}`, 'owner');
+    return { ok: false, values: valuesFrom(fields), errors: {}, message: error.hint ? `${error.message} ${error.hint}` : error.message };
+  }
+  // The owner typed this in personally, so the audit line says so.
+  await store.logAudit(ctx.db, 'setup_business', parsed.patch, 'ok', 'owner');
+  return { ok: true };
 }
