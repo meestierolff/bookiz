@@ -340,3 +340,11 @@ test('a yearly btw filer: one return for the whole year, due 31 March, with earl
   const late = await invoices.createInvoice(ctx, { contact_id: customer, lines: [{ description: 'Vergeten', quantity: 1, unit_price: 100 }], issue_date: '2026-12-20' });
   await assert.rejects(invoices.finalizeInvoice(ctx, late.draft_id), /al is gedaan/);
 });
+
+test('the overview names missing details in Dutch', async () => {
+  const ctx = await makeCtx();
+  await setupBusiness(ctx, { name: 'Studio Voorbeeld' });
+  const overview = (await reports.overview(ctx)) as { next_actions: string[] };
+  assert.ok(overview.next_actions.includes('Bedrijfsgegevens aanvullen voordat je kunt factureren: adres, postcode, plaats, KvK-nummer, IBAN.'));
+  assert.ok(overview.next_actions.every((action) => !action.includes('address_line')));
+});

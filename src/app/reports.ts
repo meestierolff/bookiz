@@ -200,8 +200,10 @@ export async function overview(ctx: Ctx) {
     );
   }
 
-  const missing = (['address_line', 'postal_code', 'city', 'kvk_number', 'iban'] as const).filter((f) => !business[f]);
-  if (missing.length > 0) actions.push(`Bedrijfsgegevens aanvullen voordat je kunt factureren: ${missing.join(', ')}.`);
+  // The dashboard shows these to people; the assistant maps them to setup_business through that tool's description.
+  const labels = { address_line: 'adres', postal_code: 'postcode', city: 'plaats', kvk_number: 'KvK-nummer', iban: 'IBAN' } as const;
+  const missing = (Object.keys(labels) as (keyof typeof labels)[]).filter((f) => !business[f]);
+  if (missing.length > 0) actions.push(`Bedrijfsgegevens aanvullen voordat je kunt factureren: ${missing.map((f) => labels[f]).join(', ')}.`);
 
   const overdue = duePeriods(books, todayDate).map((period) => ({
     period,
