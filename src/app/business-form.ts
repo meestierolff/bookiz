@@ -58,7 +58,8 @@ export function formValuesOf(business: Business | null, signInEmail: string): Bu
     iban: business?.iban ?? '',
     email: business?.email ?? signInEmail,
     vat_period: business?.vat_period ?? 'quarter',
-    kor: business?.kor_since ? 'ja' : '',
+    // An untouched KOR question is a no: the radio group always posts, so the btw-id rule can apply.
+    kor: business?.kor_since ? 'ja' : 'nee',
     kor_since: business?.kor_since ?? '',
     payment_term_days: String(business?.payment_term_days ?? 30),
   };
@@ -69,8 +70,15 @@ export function valuesFrom(fields: URLSearchParams): BusinessFormValues {
   return Object.fromEntries(FIELDS.map((field) => [field, (fields.get(field) ?? '').trim()])) as BusinessFormValues;
 }
 
+/** The period and KOR on file, kept when a fixed form shows them as text and so does not post them. */
+export function keepFixed(posted: BusinessFormValues, stored: BusinessFormValues): BusinessFormValues {
+  return { ...posted, vat_period: stored.vat_period, kor: stored.kor, kor_since: stored.kor_since };
+}
+
+/** `current` is what is on file; it decides the btw-id rule when the form does not post the KOR. */
 export function parseBusinessForm(
   fields: URLSearchParams,
+  current: Business | null = null,
 ): { patch: Partial<Business> } | { values: BusinessFormValues; errors: BusinessFormErrors } {
   const values = valuesFrom(fields);
   const errors: BusinessFormErrors = {};
@@ -109,16 +117,18 @@ export function parseBusinessForm(
   if (kor === true) {
     if (!DATE.test(values.kor_since)) errors.kor_since = 'Vul de datum in waarop je met de KOR begon.';
     else patch.kor_since = values.kor_since;
+  } else if (values.kor_since) {
+    errors.kor_since = "Kies 'ja' als je de KOR gebruikt, of maak de datum leeg.";
   } else if (kor === false) {
     patch.kor_since = null;
   }
+  const korApplies = kor ?? Boolean(current?.kor_since && !current.kor_until);
 
   const vatId = compact(values.vat_id).toUpperCase();
   if (vatId) {
     if (!VAT_ID.test(vatId)) errors.vat_id = 'Een btw-id ziet eruit als NL123456789B01.';
     else patch.vat_id = vatId;
-  } else if (kor === false) {
-    // Only when the form says "no KOR": a fixed form does not post the KOR, and finalizing an invoice checks the btw-id anyway.
+  } else if (!korApplies) {
     errors.vat_id = 'Vul je btw-id in; zonder KOR staat het verplicht op je facturen.';
   }
 
@@ -153,16 +163,20 @@ export async function businessFormState(ctx: Ctx, signInEmail: string): Promise<
 export async function saveBusinessForm(
   ctx: Ctx,
   fields: URLSearchParams,
-): Promise<{ ok: true } | { ok: false; values: BusinessFormValues; errors: BusinessFormErrors; message?: string }> {
-  if (ctx.locked) return { ok: false, values: valuesFrom(fields), errors: {}, message: ctx.locked };
-  const parsed = parseBusinessForm(fields);
-  if ('errors' in parsed) return { ok: false, values: parsed.values, errors: parsed.errors };
+): Promise<{ ok: true } | { ok: false; values: BusinessFormValues; errors: BusinessFormErrors; message?: string; fixed: boolean }> {
+  const state = await businessFormState(ctx, '');
+  // A fixed form did not post the period and KOR; show the ones on file, not blanks.
+  const shown = (values: BusinessFormValues) => (state.fixed ? keepFixed(values, state.values) : values);
+  if (ctx.locked) return { ok: false, values: shown(valuesFrom(fields)), errors: {}, message: ctx.locked, fixed: state.fixed };
+  const parsed = parseBusinessForm(fields, await store.getBusiness(ctx.db));
+  if ('errors' in parsed) return { ok: false, values: shown(parsed.values), errors: parsed.errors, fixed: state.fixed };
   try {
     await setupBusiness(ctx, parsed.patch);
   } catch (error) {
     if (!(error instanceof BookizError)) throw error;
     await store.logAudit(ctx.db, 'setup_business', parsed.patch, `error: ${error.message}`, 'owner');
-    return { ok: false, values: valuesFrom(fields), errors: {}, message: error.hint ? `${error.message} ${error.hint}` : error.message };
+    const message = error.hint ? `${error.message} ${error.hint}` : error.message;
+    return { ok: false, values: shown(valuesFrom(fields)), errors: {}, message, fixed: state.fixed };
   }
   // The owner typed this in personally, so the audit line says so.
   await store.logAudit(ctx.db, 'setup_business', parsed.patch, 'ok', 'owner');

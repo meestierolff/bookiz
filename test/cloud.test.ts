@@ -480,4 +480,7 @@ test('a fixed form has no period or KOR inputs', () => {
   const html = businessPage('nonce', { values: formValuesOf(null, someone.email), errors: {}, fixed: true });
   assert.ok(!html.includes('name="vat_period"'));
   assert.ok(!html.includes('name="kor"'));
+  // The engine refuses a period change once anything is booked, through the assistant too.
+  assert.ok(html.includes('Dit staat vast sinds je eerste boeking.'));
+  assert.ok(!html.includes('Dit staat vast sinds je eerste boeking; wijzigen via je assistent'));
 });

@@ -54,7 +54,7 @@ function businessForm(values: BusinessFormValues, errors: BusinessFormErrors, fi
   const radio = (name: BusinessFormField, value: string, label: string) =>
     `<label><input type="radio" name="${name}" value="${value}"${values[name] === value ? ' checked' : ''}> ${label}</label>`;
   const period = fixed
-    ? `<p><strong>Btw-aangifte:</strong> ${esc(PERIOD[values.vat_period] ?? values.vat_period)}. Dit staat vast sinds je eerste boeking; wijzigen via je assistent.</p>`
+    ? `<p><strong>Btw-aangifte:</strong> ${esc(PERIOD[values.vat_period] ?? values.vat_period)}. Dit staat vast sinds je eerste boeking.</p>`
     : `<fieldset><legend>Btw-aangifte</legend>
   <div class="options">${radio('vat_period', 'quarter', 'per kwartaal')}${radio('vat_period', 'month', 'per maand')}${radio('vat_period', 'year', 'per jaar')}</div>
   <p class="quiet">Kies dit goed: na je eerste boeking kan het niet meer wijzigen.</p>${errors.vat_period ? errorLine(errors.vat_period) : ''}

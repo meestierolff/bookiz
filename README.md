@@ -245,7 +245,8 @@ nothing of each other.
 A new customer fills in the business details once, in a form on `/app` that
 saves through the same rules as `setup_business`; the assistant takes over
 from a complete profile. Once anything is booked, the filing frequency and
-the KOR are fixed in that form and change only through the assistant.
+the KOR are fixed in that form: the filing frequency cannot change any more,
+and ending the KOR goes through the assistant.
 
 ### Remote server
 

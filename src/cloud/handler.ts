@@ -432,10 +432,7 @@ async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url:
       cloud.env,
       account,
       cloud.mail,
-      async (ctx) => {
-        const saved = await saveBusinessForm(ctx, fields);
-        return saved.ok ? saved : { ...saved, fixed: (await businessFormState(ctx, account.email)).fixed };
-      },
+      (ctx) => saveBusinessForm(ctx, fields),
       cloud.now,
     );
     if (outcome.ok) return redirect(res, '/app');
