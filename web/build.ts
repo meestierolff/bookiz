@@ -68,7 +68,7 @@ function header(onHome: boolean): string {
     </nav>
     <div class="hdr-actions">
       <a class="pill pill-outline" href="${esc(site.repo_url)}">${GITHUB_ICON}GitHub</a>
-      <a class="pill pill-orange" href="${at('prijzen')}">Begin voor € 0 <span class="raquo">»</span></a>
+      ${site.cloud.open ? '<a class="pill pill-orange" href="/app">Start gratis <span class="raquo">»</span></a>' : `<a class="pill pill-orange" href="${at('prijzen')}">Begin voor € 0 <span class="raquo">»</span></a>`}
     </div>
   </div>
 </header>`;

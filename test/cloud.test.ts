@@ -8,7 +8,7 @@ import * as invoices from '../src/app/invoices.ts';
 import * as reports from '../src/app/reports.ts';
 import type { CloudEnv } from '../src/cloud/env.ts';
 import { accountFor, type Cloud, checkoutUrl, handle, verifyStripeSignature } from '../src/cloud/handler.ts';
-import { businessPage, dashboardPage, loginPage, messagePage } from '../src/cloud/pages.ts';
+import { businessPage, dashboardPage, loginPage, messagePage, nextQuarterStart } from '../src/cloud/pages.ts';
 import { formValuesOf } from '../src/app/business-form.ts';
 import type { Business } from '../src/core/types.ts';
 import type { Mail } from '../src/mail.ts';
@@ -420,7 +420,12 @@ const someone: Account = {
   schema_version: SCHEMA_VERSION,
   created_at: '2026-11-16T10:00:00.000Z',
 };
-const page = (overview: Record<string, unknown>, details: Business | null, fixed = false) =>
+const page = (
+  overview: Record<string, unknown>,
+  details: Business | null,
+  fixed = false,
+  extra: Partial<Parameters<typeof dashboardPage>[1]> = {},
+) =>
   dashboardPage('nonce', {
     account: someone,
     access: true,
@@ -431,6 +436,8 @@ const page = (overview: Record<string, unknown>, details: Business | null, fixed
     years: [2026],
     grants: [],
     business: { details, form: { values: formValuesOf(details, someone.email), fixed } },
+    today: '2026-11-21',
+    ...extra,
   });
 
 test('a new customer sees the business form before the assistant', () => {
@@ -460,7 +467,10 @@ test('a set-up customer sees the details and where to change them', () => {
     payment_term_days: 30,
     books_start: null,
   };
-  const html = page({ business: 'Studio Voorbeeld', btw: {}, invoices: {}, next_actions: [] }, details);
+  // After onboarding: the business is set up and an assistant is connected.
+  const html = page({ business: 'Studio Voorbeeld', btw: {}, invoices: {}, next_actions: [] }, details, false, {
+    grants: [{ clientId: 'c1', name: 'Claude', since: '2026-11-20T10:00:00Z' }],
+  });
   assert.ok(html.includes('12345678'));
   assert.ok(html.includes('per jaar'));
   assert.ok(html.includes('Iets wijzigen? Zeg het tegen je assistent'));
@@ -483,4 +493,63 @@ test('a fixed form has no period or KOR inputs', () => {
   // The engine refuses a period change once anything is booked, through the assistant too.
   assert.ok(html.includes('Dit staat vast sinds je eerste boeking.'));
   assert.ok(!html.includes('Dit staat vast sinds je eerste boeking; wijzigen via je assistent'));
+});
+
+const setUp: Business = {
+  name: 'Studio Voorbeeld', owner_name: null, address_line: 'Dorpsstraat 1', postal_code: '1234 AB', city: 'Utrecht',
+  kvk_number: '12345678', vat_id: 'NL123456789B01', iban: 'NL91ABNA0417164300', email: 'alice@example.test', archive_email: null,
+  kor_since: null, kor_until: null, vat_period: 'quarter', payment_term_days: 30, books_start: null,
+};
+const figures = { business: 'Studio Voorbeeld', btw: {}, invoices: {}, next_actions: [] };
+
+test('a new customer is led through three steps, with copy buttons', () => {
+  const html = page({ setup: 'nog niet ingericht', next_actions: [] }, null);
+  const one = html.indexOf('1 · Je bedrijf');
+  const two = html.indexOf('2 · Stap je over?');
+  const three = html.indexOf('3 · Koppel je AI-assistent');
+  assert.ok(one > 0 && one < two && two < three, `${one} ${two} ${three}`);
+  assert.ok(html.includes('Ik stap over naar Bookiz per 1 januari 2027.'));
+  assert.ok(html.includes('data-copy="https://bookiz.test/mcp"'));
+  assert.ok(html.includes('<script nonce="nonce">'));
+});
+
+test('during the trial the buy buttons wait until after the steps', () => {
+  const html = page(figures, setUp);
+  assert.ok(html.indexOf('Neem Bookiz Cloud') > html.indexOf('Koppel je AI-assistent'));
+});
+
+test('once the trial is over, paying comes first', () => {
+  const html = page(figures, setUp, false, { access: false });
+  assert.ok(html.indexOf('Neem Bookiz Cloud') < html.indexOf('Koppel je AI-assistent'));
+});
+
+test('a connected customer sees the administration first and no steps', () => {
+  const html = page(figures, setUp, true, { grants: [{ clientId: 'c1', name: 'Claude', since: '2026-11-20T10:00:00Z' }] });
+  assert.ok(html.indexOf('Je administratie') < html.indexOf('Koppel je AI-assistent'));
+  assert.ok(!html.includes('1 · Je bedrijf'));
+});
+
+test('the switch date is the start of the next quarter, or today when today starts one', () => {
+  assert.equal(nextQuarterStart('2026-11-21'), '2027-01-01');
+  assert.equal(nextQuarterStart('2026-03-31'), '2026-04-01');
+  assert.equal(nextQuarterStart('2026-04-01'), '2026-04-01');
+});
+
+test('the login page tells a new visitor it is free to start', () => {
+  const html = loginPage('nonce', { next: '/app', trialDays: 30 });
+  assert.ok(html.includes('30 dagen gratis, zonder betaalgegevens'));
+});
+
+test('exports wait until the customer is past the first steps', () => {
+  assert.ok(!page({ setup: 'nog niet ingericht', next_actions: [] }, null).includes('Je gegevens meenemen'));
+  const connected = page(figures, setUp, true, { grants: [{ clientId: 'c1', name: 'Claude', since: '2026-11-20T10:00:00Z' }] });
+  assert.ok(connected.includes('Je gegevens meenemen'));
+});
+
+test('a connected assistant can always be revoked, also before the business is set up', () => {
+  const html = page({ setup: 'nog niet ingericht', next_actions: [] }, null, false, {
+    grants: [{ clientId: 'c1', name: 'Claude', since: '2026-11-20T10:00:00Z' }],
+  });
+  assert.ok(html.includes('toegang intrekken'));
+  assert.ok(html.includes('name="client_id" value="c1"'));
 });
