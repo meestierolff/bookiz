@@ -48,6 +48,8 @@ for (const [path, html] of pages) {
   // The privacy statement says the public pages count visits with Vercel Web Analytics.
   const analytics = (html.match(/<script src="\/_vercel\/insights\/script\.js" defer><\/script>/g) ?? []).length;
   if (analytics !== 1) problems.push(`${path}: ${analytics} Web Analytics scripts, expected 1`);
+  // One click from any page to signing up: the header's main button goes straight to /app.
+  if (!html.includes('<a class="pill pill-orange" href="/app">')) problems.push(`${path}: the header button does not lead to /app`);
   for (const m of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) {
     try {
       JSON.parse(m[1] as string);

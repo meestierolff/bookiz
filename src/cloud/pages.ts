@@ -67,15 +67,11 @@ function businessForm(values: BusinessFormValues, errors: BusinessFormErrors, fi
 </fieldset>`;
   return `<form method="post" action="/app/bedrijf" class="card accent bizform">
 ${errorLine(message)}
-  ${field('name', 'Bedrijfsnaam', 'required autocomplete="organization"')}
-  ${field('owner_name', 'Je naam (onder je e-mails)', 'autocomplete="name"')}
+  <div class="pair"><div>${field('name', 'Bedrijfsnaam', 'required autocomplete="organization"')}</div><div>${field('owner_name', 'Je naam (onder je e-mails)', 'autocomplete="name"')}</div></div>
   ${field('address_line', 'Adres', 'required autocomplete="street-address"')}
-  ${field('postal_code', 'Postcode', 'required autocomplete="postal-code"')}
-  ${field('city', 'Plaats', 'required autocomplete="address-level2"')}
-  ${field('kvk_number', 'KvK-nummer', 'required inputmode="numeric"')}
-  ${field('vat_id', 'Btw-id (niet nodig met de KOR)')}
-  ${field('iban', 'IBAN', 'required')}
-  ${field('email', 'E-mail op je facturen', 'required type="email" autocomplete="email"')}
+  <div class="pair"><div>${field('postal_code', 'Postcode', 'required autocomplete="postal-code"')}</div><div>${field('city', 'Plaats', 'required autocomplete="address-level2"')}</div></div>
+  <div class="pair"><div>${field('kvk_number', 'KvK-nummer', 'required inputmode="numeric"')}</div><div>${field('vat_id', 'Btw-id (niet nodig met de KOR)')}</div></div>
+  <div class="pair"><div>${field('iban', 'IBAN', 'required')}</div><div>${field('email', 'E-mail op je facturen', 'required type="email" autocomplete="email"')}</div></div>
   ${period}
   ${kor}
   ${field('payment_term_days', 'Betaaltermijn in dagen', 'inputmode="numeric"')}
@@ -112,12 +108,12 @@ function businessSummary(business: Business): string {
 <p class="quiet">Iets wijzigen? Zeg het tegen je assistent, <a href="/app/bedrijf">of pas het hier aan</a>.</p></div>`;
 }
 
-export function loginPage(nonce: string, options: { next: string; error?: string | undefined }): string {
+export function loginPage(nonce: string, options: { next: string; error?: string | undefined; trialDays?: number }): string {
   return shell(
     'Inloggen',
     `<span class="eyebrow">Bookiz Cloud</span>
-<h1>Inloggen</h1>
-<p>Vul je e-mailadres in. Je krijgt een code per e-mail; een wachtwoord is niet nodig. Heb je nog geen account, dan maken we het meteen aan, met dertig dagen op proef.</p>
+<h1>Gratis beginnen of inloggen</h1>
+<p>Vul je e-mailadres in. Je krijgt een code per e-mail; een wachtwoord is niet nodig. Nieuw? Dan maken we je account meteen aan: ${options.trialDays ?? 30} dagen gratis, zonder betaalgegevens.</p>
 ${errorLine(options.error)}
 <form method="post" action="/app/login" class="card accent">
   <input type="hidden" name="next" value="${esc(options.next)}">
@@ -175,6 +171,8 @@ export function dashboardPage(
     grants: { clientId: string; name: string; since: string }[];
     /** The stored details, and the form to fill them in while there are none. */
     business: { details: Business | null; form: { values: BusinessFormValues; fixed: boolean } };
+    /** Today in Dutch time, YYYY-MM-DD; picks the switch date the step-2 prompt suggests. */
+    today: string;
   },
 ): string {
   const { account, overview } = options;
@@ -214,15 +212,6 @@ export function dashboardPage(
 </div>
 <div class="card"><span class="eyebrow">Wat er nu te doen is</span><ul class="todo">${(overview.next_actions as string[]).map((action) => `<li>${esc(action)}</li>`).join('')}</ul></div>`
     : '';
-  const details = options.business.details;
-  // Without a business the first step is the form; the assistant takes over from there.
-  const first = details
-    ? ''
-    : `<h2>1 · Je bedrijf</h2>
-<p>Vul je gegevens één keer in; ze komen op je facturen. Stap je over van een ander pakket? Zeg dat daarna tegen je assistent, met de datum.</p>
-${businessForm(options.business.form.values, {}, options.business.form.fixed)}
-`;
-
   const receipts =
     options.missingReceipts.length > 0
       ? `<h2>Bonnen die nog ontbreken</h2>
@@ -242,30 +231,63 @@ ${businessForm(options.business.form.values, {}, options.business.form.fixed)}
           .join('')}</ul></div>`
       : '';
 
-  return shell(
-    'Mijn Bookiz',
-    `<span class="eyebrow">Bookiz Cloud</span>
+  const details = options.business.details;
+  const connected = options.grants.length > 0;
+  // Until the business is filled in and an assistant is connected, the page is a short path of three steps.
+  const onboarding = !details || !connected;
+  const copy = (text: string, label = 'Kopieer') => `<button class="copy" type="button" data-copy="${esc(text)}">${label}</button>`;
+  const prompt = `Ik stap over naar Bookiz per ${day(nextQuarterStart(options.today))}. In de bijlage staat mijn export uit Moneybird. Zet mijn klanten, mijn onbetaalde facturen, mijn laatste factuurnummer en de bedrijfsmiddelen die ik nog afschrijf over naar Bookiz. Laat me eerst zien wat je gaat overzetten.`;
+
+  const connect = `<h2 id="stap-3">${onboarding ? '3 · ' : ''}Koppel je AI-assistent</h2>
+<p>Voeg in je assistent een eigen connector toe (ook wel MCP-server genoemd) met dit adres:</p>
+<div class="card accent copyrow"><span class="address">${esc(options.mcpUrl)}</span>${copy(options.mcpUrl)}</div>
+<div class="card"><ul class="todo">
+  <li><strong>Claude</strong> (web, desktop, telefoon): Instellingen, Connectors, eigen connector toevoegen. Plak het adres.</li>
+  <li><strong>Claude Code:</strong> <code>claude mcp add --transport http bookiz ${esc(options.mcpUrl)}</code></li>
+  <li><strong>ChatGPT:</strong> eigen MCP-servers met schrijfrechten staan alleen open voor Business, Enterprise en Edu, op het web.</li>
+  <li><strong>Grok:</strong> grok.com/connectors, nieuwe connector, Custom.</li>
+</ul></div>
+<p class="quiet">Je assistent vraagt je daarna in te loggen met ${esc(account.email)} en toestemming te geven. Zeg dan: <strong>“Hoe sta ik ervoor?”</strong></p>`;
+
+  const steps = onboarding
+    ? `${
+        details
+          ? `<h2>1 · Je bedrijf</h2>
+<div class="card done"><p><strong>${esc(details.name)}</strong> staat erin. <a href="/app/bedrijf">Aanpassen</a></p></div>`
+          : `<h2>1 · Je bedrijf</h2>
+<p>Vul je gegevens één keer in; ze komen op je facturen.</p>
+${businessForm(options.business.form.values, {}, options.business.form.fixed)}`
+      }
+<h2 id="stap-2">2 · Stap je over?</h2>
+<details class="card">
+  <summary><strong>Ja, ik kom van Moneybird of een ander pakket</strong></summary>
+  <p>Maak in je oude pakket een export van je klanten en je onbetaalde facturen (<a href="/overstappen/moneybird/">zo doe je dat</a>). Sleep die bestanden in Claude en plak dit erbij:</p>
+  <p class="prompt">${esc(prompt)}</p>
+  ${copy(prompt, 'Kopieer deze tekst')}
+</details>
+<p class="quiet">Begin je nieuw? Sla deze stap over.</p>
+${connect}`
+    : '';
+
+  const administration = isSetUp ? `<h2>Je administratie</h2>\n${books}` : '';
+  const later = onboarding
+    ? ''
+    : `${connect}
+${grants}`;
+
+  const page = `<span class="eyebrow">Bookiz Cloud</span>
 <h1>Mijn Bookiz</h1>
 <p class="quiet">Ingelogd als ${esc(account.email)}</p>
 ${chip}
-${subscribe}
-
-${first}<h2>${details ? '' : '2 · '}Koppel je AI-assistent</h2>
-<p>Bookiz bedien je vanuit de assistent die je al gebruikt. Voeg daar een eigen connector toe (ook wel MCP-server genoemd) met dit adres:</p>
-<div class="card accent"><span class="address">${esc(options.mcpUrl)}</span></div>
-<div class="card"><ul class="todo">
-  <li><strong>Claude:</strong> Instellingen, Connectors, eigen connector toevoegen.</li>
-  <li><strong>ChatGPT:</strong> eigen MCP-servers met schrijfrechten staan nu alleen open voor Business, Enterprise en Edu, op het web. Met Pro kan ChatGPT alleen meelezen.</li>
-  <li><strong>Grok:</strong> grok.com/connectors, nieuwe connector, Custom.</li>
-  <li><strong>Claude Code:</strong> <code>claude mcp add --transport http bookiz ${esc(options.mcpUrl)}</code></li>
-</ul></div>
-<p class="quiet">Je assistent vraagt je daarna om in te loggen met dit e-mailadres en om toestemming te geven. De menu’s van de assistenten veranderen geregeld; zoek op “connector” of “MCP” als het er anders uitziet.</p>
-${grants}
-${details ? businessSummary(details) : ''}
-${isSetUp ? `<h2>Je administratie</h2>\n${books}` : ''}
+${options.access ? '' : subscribe}
+${steps}
+${onboarding ? '' : administration}
 ${receipts}
+${later}
+${!onboarding && details ? businessSummary(details) : ''}
+${options.access && buttons ? `<h2>Na je proefperiode</h2>\n${subscribe}` : options.access ? subscribe : ''}
 
-<h2>Je gegevens meenemen</h2>
+${onboarding ? '' : `<h2>Je gegevens meenemen</h2>
 <p><strong>Voor je boekhouder:</strong> een Excel-bestand met een tab Inkomsten (elke factuurregel) en een tab Uitgaven (elke bon), met datums, btw-tarief, bedragen excl. en incl. btw. De kolommen tellen op tot de cijfers in je jaaroverzicht.</p>
 ${options.years
   .map(
@@ -273,10 +295,28 @@ ${options.years
   )
   .join('')}
 <p class="quiet"><strong>Als back-up of om te vertrekken:</strong> alles van één jaar in één bestand, met aangiftes en het jaaroverzicht. Bewaar het; je moet je administratie zeven jaar kunnen tonen.</p>
-<div class="choice">${options.years.map((year) => `<a class="plan-btn outline" href="/app/export?year=${year}">Volledige export ${year} (JSON)</a>`).join('')}</div>`,
-    nonce,
-    { signedIn: true },
-  );
+<div class="choice">${options.years.map((year) => `<a class="plan-btn outline" href="/app/export?year=${year}">Volledige export ${year} (JSON)</a>`).join('')}</div>`}
+<script nonce="${nonce}">
+for (const button of document.querySelectorAll('[data-copy]')) {
+  button.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(button.dataset.copy);
+      button.textContent = 'Gekopieerd';
+    } catch {
+      button.textContent = 'Selecteer en kopieer zelf';
+    }
+  });
+}
+</script>`;
+  return shell('Mijn Bookiz', page, nonce, { signedIn: true });
+}
+
+/** The first day of a btw quarter on or after `today` (YYYY-MM-DD): a clean date to switch packages. */
+export function nextQuarterStart(today: string): string {
+  const [year, month, dayOfMonth] = today.split('-').map(Number) as [number, number, number];
+  if (dayOfMonth === 1 && (month - 1) % 3 === 0) return today;
+  const next = Math.floor((month - 1) / 3) * 3 + 4;
+  return next > 12 ? `${year + 1}-01-01` : `${year}-${String(next).padStart(2, '0')}-01`;
 }
 
 export function consentPage(

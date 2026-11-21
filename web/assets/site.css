@@ -617,6 +617,18 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visibl
 .bizform .options { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
 .bizform .options label { display: inline-flex; align-items: center; gap: 8px; margin-top: 0; font-weight: 400; color: var(--text-2); }
 .bizform input[type="radio"] { accent-color: var(--orange); width: 18px; height: 18px; }
+.bizform .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+@media (max-width: 640px) { .bizform .pair { grid-template-columns: 1fr; } }
+/* The KOR date only matters with "ja"; hide it otherwise (no script needed). */
+.bizform fieldset:has(input[name="kor"][value="nee"]:checked) #f-kor_since { display: none; }
+.copyrow { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.copy { flex: none; border: 1px solid rgba(250, 73, 1, 0.55); background: transparent; color: var(--o-1); font: 600 14px var(--body); border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+.copy:hover, .copy:focus-visible { background: rgba(250, 73, 1, 0.12); outline: none; }
+.prompt { font: 15px/1.55 var(--mono); color: var(--text); background: var(--ink); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 14px 0 12px; }
+.app details.card summary { cursor: pointer; color: var(--text); list-style-position: inside; }
+.app details.card[open] summary { margin-bottom: 6px; }
+.card.done { border-color: rgba(74, 222, 128, 0.35); }
+.card.done p::before { content: '✓ '; color: var(--success); font-weight: 700; }
 .inline { display: inline; margin-left: 0.4rem; }
 .choice { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
 .choice .plan-btn { padding: 13px 24px; cursor: pointer; font: 600 16px var(--body); }

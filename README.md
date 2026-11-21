@@ -242,9 +242,13 @@ the engine is pointed at one schema and cannot name another. `scripts/cloud-e2e.
 checks the whole flow against a deployment, including that two customers see
 nothing of each other.
 
-A new customer fills in the business details once, in a form on `/app` that
-saves through the same rules as `setup_business`; the assistant takes over
-from a complete profile. Once anything is booked, the filing frequency and
+A new customer signs in with an e-mail code (30 days free, no payment
+details) and `/app` leads them through three steps: the business details,
+once, in a form that saves through the same rules as `setup_business`;
+switching, as a prompt to paste into the assistant together with the export
+from the old package; and connecting the assistant, with the address to copy.
+After the trial, booking stops and the dashboard offers the Stripe payment
+link, which returns to `/app`. Once anything is booked, the filing frequency and
 the KOR are fixed in that form: the filing frequency cannot change any more,
 and ending the KOR goes through the assistant.
 

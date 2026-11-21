@@ -43,6 +43,8 @@ import {
 
 export type Cloud = { env: CloudEnv; connect: Connector; mail: Mailer; now: () => Date };
 
+const dutchToday = (now: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Amsterdam' }).format(now);
+
 /**
  * The signed-in user's account. A new one is reported to the operator, who
  * writes to each person starting a trial to help them get going.
@@ -281,6 +283,7 @@ async function dashboard(cloud: Cloud, req: IncomingMessage, res: ServerResponse
       missingReceipts: data.missing,
       years: data.years,
       business: data.business,
+      today: dutchToday(cloud.now()),
     }),
   );
 }
@@ -328,7 +331,7 @@ async function consent(cloud: Cloud, req: IncomingMessage, res: ServerResponse, 
 async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url: URL, parts: string[]): Promise<void> {
   const page = parts[1] ?? '';
   if (page === 'login' && req.method === 'GET') {
-    return sendHtml(res, 200, (nonce) => loginPage(nonce, { next: safeNext(url.searchParams.get('next')) }));
+    return sendHtml(res, 200, (nonce) => loginPage(nonce, { next: safeNext(url.searchParams.get('next')), trialDays: cloud.env.trialDays }));
   }
   if (req.method === 'POST' && !sameOrigin(cloud, req)) return send(res, 403, 'Niet toegestaan.');
 
@@ -435,7 +438,8 @@ async function app(cloud: Cloud, req: IncomingMessage, res: ServerResponse, url:
       (ctx) => saveBusinessForm(ctx, fields),
       cloud.now,
     );
-    if (outcome.ok) return redirect(res, '/app');
+    // On to the next step: whether the customer is switching from another package.
+    if (outcome.ok) return redirect(res, '/app#stap-2');
     return sendHtml(res, 400, (nonce) => businessPage(nonce, { values: outcome.values, errors: outcome.errors, fixed: outcome.fixed, message: outcome.message }));
   }
   if (page === '' && req.method === 'GET') return dashboard(cloud, req, res, session);

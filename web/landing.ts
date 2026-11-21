@@ -92,7 +92,7 @@ export function landingBody(input: LandingInput): string {
     <h1 class="h1">Run je boekhouding<br>met <span class="rot" id="rot"><span class="rot-tile"><img id="rot-logo" src="${ASSISTANTS[0]?.logo}" alt=""></span><span class="rot-name" id="rot-name">${esc(ASSISTANTS[0]?.name ?? '')}</span></span></h1>
     <p class="hero-sub">Bookiz is boekhouding voor eenmanszaken met weinig facturen. Je zegt wat er gebeurde. Je assistent zet Bookiz aan het werk. Je facturen, bonnen en btw-aangifte kloppen, volgens regels die je zelf kunt nalezen.</p>
     <div class="cta-row">
-      <a class="cta-primary" href="#prijzen">Begin voor € 0 <span class="raquo">»</span></a>
+      ${input.cloud.open ? `<a class="cta-primary" href="/app">Start ${input.cloud.trialDays} dagen gratis <span class="raquo">»</span></a>` : '<a class="cta-primary" href="#prijzen">Begin voor € 0 <span class="raquo">»</span></a>'}
       <a class="cta-secondary" href="#live"><span class="play-dot">▶</span>Bekijk de demo</a>
     </div>
   </div>
@@ -454,7 +454,7 @@ export function landingBody(input: LandingInput): string {
     </div>
     <div class="closing-cta">
       <svg width="150" height="90" viewBox="0 0 150 90" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 18C30 -4 70 30 52 58C40 78 18 54 46 46C76 38 106 50 136 46"></path><path d="M122 34L138 46L124 60"></path></svg>
-      <a class="cta-big" href="#prijzen">Begin voor € 0 <span class="raquo">»</span></a>
+      ${input.cloud.open ? `<a class="cta-big" href="/app">Start ${input.cloud.trialDays} dagen gratis <span class="raquo">»</span></a>` : '<a class="cta-big" href="#prijzen">Begin voor € 0 <span class="raquo">»</span></a>'}
     </div>
   </div>
 </section>
