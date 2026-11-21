@@ -611,6 +611,12 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visibl
 .app p.quiet { font-size: 14.5px; }
 .linkbutton { background: none; border: 0; padding: 0; color: var(--o-1); font: inherit; text-decoration: underline; cursor: pointer; }
 .error { color: #ff9b7a; font-weight: 600; }
+.bizform label { display: block; margin-top: 18px; }
+.bizform fieldset { border: 0; padding: 0; margin: 22px 0 0; }
+.bizform legend { font-weight: 600; color: var(--text); padding: 0; }
+.bizform .options { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
+.bizform .options label { display: inline-flex; align-items: center; gap: 8px; margin-top: 0; font-weight: 400; color: var(--text-2); }
+.bizform input[type="radio"] { accent-color: var(--orange); width: 18px; height: 18px; }
 .inline { display: inline; margin-left: 0.4rem; }
 .choice { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
 .choice .plan-btn { padding: 13px 24px; cursor: pointer; font: 600 16px var(--body); }
