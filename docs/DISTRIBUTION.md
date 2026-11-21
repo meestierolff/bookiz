@@ -38,6 +38,8 @@ reply may say; the right column is its source or the proof still missing.
 | "Works with Claude" | True since 21 November 2026: the owner booked K2026-001 with a photo through Claude on the live server. The original goes in once more through the upload link, because Claude does not hand files to a remote server |
 | "Install it yourself in Claude Code" | **Needs proof:** one `finalize_invoice` in Claude Code against a throwaway data folder (also tests the new confirmation form) |
 | "Switch from Moneybird and carry on" | **Needs proof:** one real Moneybird export through `import_opening_state`, outstanding amount checked. Until then: "overstappen kan per 1 januari of per kwartaal; zie boekiehouder.nl/overstappen" |
+| An Excel or CSV export per year for the bookkeeper (Inkomsten, Uitgaven), plus a full export with returns, year report and audit log | True: Mijn Bookiz, "Je gegevens meenemen" |
+| "Geef je bankexport (CSV) aan Claude: hij registreert betalingen en noemt de afschrijvingen zonder bon" | **Needs proof:** the owner runs one month of his own bank CSV through Claude once. Bookiz has no bank import; Claude uses the existing tools |
 | Customers, reviews, time saved, accuracy | **None exist.** Do not say or imply any |
 
 Every post says plainly that Bookiz is early (0.1) and that the maker is
@@ -211,11 +213,13 @@ About three hours a week (owner, 19 November 2026).
 | When | Owner step | Why |
 | --- | --- | --- |
 | Week 1 | ~~Phone test~~ done on 21 November 2026 | "Werkt met Claude" may be used |
+| Week 1 | ~~Onboarding from the landing page~~ live on 21 November 2026 (PR #31, #32) | "Start gratis" leads to sign-in, business details, switching, connecting |
+| Week 1 | Draft 4 in the r/ondernemen promo thread (once), now | The one place that allows it without asking; the flow it describes is live |
+| Week 1 | Run one month of bank CSV through Claude | Proof for the bank claim, and the answer to the first question people will ask |
 | Week 1 | Claude Code test: one `finalize_invoice` against a throwaway data folder | Unlocks the self-host call to action and the r/mcp post |
 | Week 1 | MCP Registry publish; mcpservers.org form | Listings that work without an audience |
 | Week 1 | Send drafts 1, 2 and 3 (ask the mods and the Tweakers crew) | The megathreads and Tweakers need a yes first |
 | Week 1 | Three hand-written answers from the thread lists, without the name | Karma, a history, and the language of the customer |
-| Week 2 | Draft 4 in the r/ondernemen promo thread (once) | The one place that allows it without asking |
 | Week 2 | Drafts 4 adapted for the megathreads where a mod said yes | |
 | Week 2 | Claude Connectors Directory submission | Ready to submit |
 | Week 2 | Draft 6 on r/mcp | After the Claude Code test |
@@ -348,6 +352,32 @@ the maker; no Done for you.
 - Question to the community: which clients show a form with no fields, and
   how do you gate irreversible tools on stateless servers?
 
+### 7. Answers for questions under the post
+
+Value: short, true answers to what people asked in the threads we read.
+When: under the owner's own post in the promo thread. Approver: Mees, in his
+own words.
+
+- **"Heeft het een bankkoppeling?"** Nee, bewust niet. Wel: download een
+  CSV van je bank en geef die aan Claude. Claude zet ontvangen betalingen bij
+  je openstaande facturen en noemt de afschrijvingen waarvoor nog geen bon in
+  Bookiz staat. Het btw-bedrag komt altijd van de bon, nooit uit de
+  bankregel. (Only after the bank CSV test above; until then: "geen
+  bankkoppeling; betalingen meld je aan Claude".)
+- **"Kan mijn boekhouder erbij?"** Op Mijn Bookiz download je per jaar een
+  Excel met een tab Inkomsten (elke factuurregel) en een tab Uitgaven (elke
+  bon), of losse CSV's. De kolommen tellen op tot het jaaroverzicht. Daarnaast
+  is er een volledige export met aangiftes, jaaroverzicht en logboek.
+- **"Weet het wat aftrekbaar is?"** Of iets zakelijk is, zeg jij. Hoe het
+  telt, past Bookiz toe volgens de regels van de Belastingdienst: btw op eten
+  en drinken in de horeca is niet aftrekbaar en 80% telt als kosten, onder de
+  KOR trek je geen btw af, een buitenlands abonnement is btw verlegd
+  (rubriek 4a/4b), en vanaf € 450 excl. btw schrijf je af. Elke regel staat
+  met de zin van de Belastingdienst in de open code.
+- **"AI en belasting, gaat dat goed?"** De AI rekent niet. Claude leest de
+  bon en geeft de feiten door; een vaste rekenmotor past de regels toe, en
+  elke bron wordt elke nacht gecontroleerd.
+
 ## Decided
 
 - **19 November 2026:** about three hours a week; the operator gets an
@@ -363,4 +393,4 @@ the maker; no Done for you.
 
 | Date | Where | What (link) | Result | Language heard |
 | --- | --- | --- | --- | --- |
-| | | | | |
+| | r/ondernemen, Promo draadje | Draft 4 | | |
