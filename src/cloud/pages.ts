@@ -270,10 +270,7 @@ ${connect}`
     : '';
 
   const administration = isSetUp ? `<h2>Je administratie</h2>\n${books}` : '';
-  const later = onboarding
-    ? ''
-    : `${connect}
-${grants}`;
+  const later = onboarding ? '' : connect;
 
   const page = `<span class="eyebrow">Bookiz Cloud</span>
 <h1>Mijn Bookiz</h1>
@@ -284,6 +281,7 @@ ${steps}
 ${onboarding ? '' : administration}
 ${receipts}
 ${later}
+${grants}
 ${!onboarding && details ? businessSummary(details) : ''}
 ${options.access && buttons ? `<h2>Na je proefperiode</h2>\n${subscribe}` : options.access ? subscribe : ''}
 

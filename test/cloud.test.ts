@@ -545,3 +545,11 @@ test('exports wait until the customer is past the first steps', () => {
   const connected = page(figures, setUp, true, { grants: [{ clientId: 'c1', name: 'Claude', since: '2026-11-20T10:00:00Z' }] });
   assert.ok(connected.includes('Je gegevens meenemen'));
 });
+
+test('a connected assistant can always be revoked, also before the business is set up', () => {
+  const html = page({ setup: 'nog niet ingericht', next_actions: [] }, null, false, {
+    grants: [{ clientId: 'c1', name: 'Claude', since: '2026-11-20T10:00:00Z' }],
+  });
+  assert.ok(html.includes('toegang intrekken'));
+  assert.ok(html.includes('name="client_id" value="c1"'));
+});
