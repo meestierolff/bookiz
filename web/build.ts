@@ -5,7 +5,7 @@ import { type RuleKey, type RuleSet, rulesFor } from '../src/rules.ts';
 import { landingBody, landingData, landingFaq } from './landing.ts';
 import { type Company, privacy, terms, who } from './legal.ts';
 import { costBody, costFaq, type MoneybirdFacts, moneybirdBody, moneybirdFaq, yearEndBody } from './guides.ts';
-import { CHECKED_ON } from './sources.ts';
+import { CHECKED_ON, DEADLINES, PRICES_CHECKED_ON } from './sources.ts';
 import { switchBody, switchFaq, type SwitchFacts } from './switch.ts';
 
 /**
@@ -266,6 +266,8 @@ const ORGANIZATION = {
  * data that says no more than the page shows (Article, BreadcrumbList, and
  * FAQPage only when the questions are on the page).
  */
+const guideDates = new Map<string, string>();
+
 function guidePage(options: {
   path: string;
   title: string;
@@ -276,7 +278,14 @@ function guidePage(options: {
   crumbs: [label: string, path: string][];
   faqs?: [string, string][];
   extraJsonLd?: unknown[];
+  checkedOn?: string;
+  published?: string;
+  author?: { name: string; url: string };
+  leadAdvice?: string;
+  pricesCheckedOn?: string;
 }): string {
+  const checkedOn = options.checkedOn ?? CHECKED_ON;
+  guideDates.set(options.path, checkedOn);
   const trail = [['Bookiz', '/'] as [string, string], ...options.crumbs];
   const crumbs = trail
     .map(([label, path], i) => (i === trail.length - 1 ? `<span aria-current="page">${esc(label)}</span>` : `<a href="${esc(path)}">${esc(label)}</a>`))
@@ -292,7 +301,10 @@ function guidePage(options: {
   <nav class="crumbs" aria-label="Kruimelpad">${crumbs}</nav>
   <h1>${esc(options.h1)}</h1>
   <p class="lead">${esc(options.lead)}</p>
-  <p class="updated">Bijgewerkt op <time datetime="${CHECKED_ON}">${dutchDate(CHECKED_ON)}</time></p>
+${options.leadAdvice ? `  <p class="lead">${esc(options.leadAdvice)}</p>` : ''}
+  <p class="updated">Bijgewerkt op <time datetime="${checkedOn}">${dutchDate(checkedOn)}</time></p>
+${options.author ? `  <p>Door <a href="${esc(options.author.url)}">${esc(options.author.name)}, maker van Bookiz</a></p>` : ''}
+${options.pricesCheckedOn ? `  <p>Prijzen gecontroleerd in <time datetime="${options.pricesCheckedOn}">${new Date(`${options.pricesCheckedOn}T12:00:00Z`).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' })}</time></p>` : ''}
 ${options.body}${faqHtml}
   <p class="note-line"><a href="/#prijzen">Bekijk wat Bookiz kost</a>${site.repo_url ? ` of <a href="${esc(site.repo_url)}">host het zelf, gratis</a>` : ''}.</p>
 </main>`,
@@ -304,8 +316,9 @@ ${options.body}${faqHtml}
         description: options.description,
         inLanguage: 'nl',
         mainEntityOfPage: `${site.site_url}${options.path}`,
-        dateModified: CHECKED_ON,
-        author: { '@id': ORGANIZATION['@id'] },
+        dateModified: checkedOn,
+        ...(options.published ? { datePublished: options.published } : {}),
+        author: options.author ? { '@type': 'Person', ...options.author } : { '@id': ORGANIZATION['@id'] },
         publisher: ORGANIZATION,
       },
       {
@@ -348,7 +361,6 @@ function cited<K extends RuleKey>(key: K): NonNullable<RuleSet['rules'][K]> {
   return rule as NonNullable<RuleSet['rules'][K]>;
 }
 
-const GUIDES = ['/overstappen/', '/overstappen/moneybird/', '/jaarafsluiting/', '/goedkoop-boekhoudprogramma-zzp/'];
 const kiaTable = cited('kia').value as { to: number; kind: string }[];
 const KIA_FROM = (kiaTable.find((band) => band.kind === 'none')?.to ?? 0);
 
@@ -393,22 +405,29 @@ const extraPages: Record<string, string> = {
     const facts: MoneybirdFacts = {
       retentionYears: rules.rules.bewaarplicht_jaren.value,
       cloudPrice: site.cloud.price_year_excl,
+      cloudPriceIncl: inclVat(site.cloud.price_year_excl),
+      q4Deadline: DEADLINES.q4,
       trialDays: site.cloud.trial_days,
       korOmzetgrens: euro(rules.rules.kor_omzetgrens.value),
     };
     return guidePage({
       path: '/overstappen/moneybird/',
-      title: 'Moneybird opzeggen en overstappen bij weinig facturen | Bookiz',
+      title: 'Moneybird opzeggen: zo bewaar je je administratie | Bookiz',
       description:
-        'Een alternatief voor Moneybird als je weinig factureert. Maak eerst een jaarexport, zeg dan pas op, en zet je klanten en open facturen over naar Bookiz.',
-      h1: 'Overstappen van Moneybird naar Bookiz',
-      lead: 'Maak eerst een jaarexport van elk boekjaar in Moneybird, zet je klanten en openstaande facturen over naar Bookiz, en zeg Moneybird pas op als de bedragen kloppen. Veertien dagen na de einddatum van je abonnement verwijdert Moneybird je administratie, dus je back-up moet er vóór die tijd zijn.',
+        'Moneybird opzeggen gaat via Instellingen, Abonnement, Huidig pakket. Maak eerst een back-up: 14 dagen na de einddatum is alles weg. Met kosten en overstapplan.',
+      h1: 'Moneybird opzeggen en overstappen',
+      lead: 'Moneybird opzeggen doe je op een computer via Instellingen › Abonnement › Huidig pakket, met de knop Abonnement opzeggen. Maak eerst een back-up, want 14 dagen na de einddatum verwijdert Moneybird je administratie. Via de app of per e-mail opzeggen kan niet.',
+      leadAdvice: 'Ons advies als je overstapt: kies 1 januari als overstapdatum, doe in januari je laatste btw-aangifte nog uit Moneybird, en zeg pas daarna op. Wil je je oude jaren in Moneybird kunnen blijven inzien, kies dan Compact in plaats van opzeggen.',
+      checkedOn: PRICES_CHECKED_ON,
+      published: '2026-11-17',
+      author: { name: 'Mees Tierolff', url: `${site.site_url}/#founder` },
+      pricesCheckedOn: PRICES_CHECKED_ON,
       body: moneybirdBody(facts, esc),
       crumbs: [
         ['Overstappen', '/overstappen/'],
         ['Van Moneybird', '/overstappen/moneybird/'],
       ],
-      faqs: moneybirdFaq(facts),
+      faqs: moneybirdFaq(),
     });
   })(),
   'goedkoop-boekhoudprogramma-zzp': guidePage({
@@ -511,7 +530,7 @@ writeFileSync(
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${['/', `/belastingregels-${YEAR}/`, ...Object.keys(extraPages).map((slug) => `/${slug}/`)]
     .map((path) => {
       // Only pages with a known date of their last material change get a lastmod.
-      const lastmod = GUIDES.includes(path) ? CHECKED_ON : path === `/belastingregels-${YEAR}/` ? rules.checked_on : null;
+      const lastmod = guideDates.get(path) ?? (path === `/belastingregels-${YEAR}/` ? rules.checked_on : null);
       return `  <url><loc>${site.site_url}${path}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}</url>`;
     })
     .join('\n')}\n</urlset>\n`,
@@ -531,7 +550,7 @@ ${site.repo_url ? `- [Broncode en installatie](${site.repo_url})\n` : ''}
 ## Overstappen
 
 - [Overstappen van boekhoudprogramma: per 1 januari, per kwartaal of nu](${site.site_url}/overstappen/): welk moment het makkelijkst is, wat je meeneemt en wat je bewaart.
-- [Overstappen van Moneybird naar Bookiz](${site.site_url}/overstappen/moneybird/): jaarexport maken, wat er na opzeggen gebeurt, klanten en openstaande facturen overzetten.
+- [Moneybird opzeggen en overstappen](${site.site_url}/overstappen/moneybird/): hoe je opzegt, wat er na 14 dagen gebeurt, Compact als archief, kosten blijven versus overstappen.
 - [Je boekjaar afsluiten als zzp'er](${site.site_url}/jaarafsluiting/): wat vóór 31 december moet, de btw-aangifte in januari en de aangifte inkomstenbelasting.
 `,
 );
