@@ -6,6 +6,15 @@
  */
 export const CHECKED_ON = '2026-11-17';
 
+export const PRICES_CHECKED_ON = '2026-11-23';
+
+/** Monthly rates: Moneybird and e-Boekhouden do not state VAT; Jortt excludes VAT. */
+export const COMPETITOR_PRICES = {
+  moneybird: { compactYear: 3, compactMonth: 4, startYear: 15, startMonth: 18 },
+  eboekhouden: { zzpMonth: 9.95 },
+  jortt: { zzpYear: 19.95, zzpMonth: 21.95 },
+} as const;
+
 export const SOURCES = {
   btwDeadlines: {
     url: 'https://www.belastingdienst.nl/wps/wcm/connect/nl/btw/content/uiterste-aangifte-en-betaaldatums',
@@ -22,6 +31,30 @@ export const SOURCES = {
   korAfmelden: {
     url: 'https://www.belastingdienst.nl/wps/wcm/connect/nl/btw/content/afmelden-kor',
     label: 'Belastingdienst: afmelden voor de kleineondernemersregeling',
+  },
+  moneybirdPrijzen: {
+    url: 'https://www.moneybird.nl/prijzen/',
+    label: 'Moneybird: prijzen',
+  },
+  moneybirdPakketten: {
+    url: 'https://www.moneybird.nl/helpcenter/nl/articles/207464-pakketten-in-moneybird',
+    label: 'Moneybird: pakketten',
+  },
+  moneybirdNieuwePakketten: {
+    url: 'https://www.moneybird.nl/helpcenter/nl/articles/712746-nieuwe-pakketten-per-1-juli',
+    label: 'Moneybird: nieuwe pakketten per 1 juli 2026',
+  },
+  moneybirdBetaalrekening: {
+    url: 'https://www.moneybird.nl/helpcenter/nl/articles/224049-moneybird-betaalrekening-opzeggen',
+    label: 'Moneybird: Betaalrekening opzeggen',
+  },
+  eboekhoudenPrijzen: {
+    url: 'https://www.e-boekhouden.nl/prijzen',
+    label: 'e-Boekhouden.nl: prijzen',
+  },
+  jorttPrijs: {
+    url: 'https://www.jortt.nl/prijs/',
+    label: 'Jortt: prijzen',
   },
   moneybirdBackup: {
     url: 'https://www.moneybird.nl/helpcenter/nl/articles/207252-back-up-maken-en-je-administratie-bewaren',

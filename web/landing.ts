@@ -373,7 +373,7 @@ export function landingBody(input: LandingInput): string {
       <div class="feat ember">
         <span class="tag-pill glass">OVERSTAPPEN</span>
         <h3>Van je oude pakket naar Bookiz</h3>
-        <p>Klanten, openstaande facturen, activa en je factuurnummering. Weg willen? Een heel jaar als één bestand. <a href="/overstappen/">Zo stap je over per 1 januari</a>.</p>
+        <p>Klanten, openstaande facturen, activa en je factuurnummering. Weg willen? Een heel jaar als één bestand. <a href="/overstappen/">Zo stap je over per 1 januari</a>. Kom je van Moneybird? Lees <a href="/overstappen/moneybird/">hoe je Moneybird opzegt zonder je administratie kwijt te raken</a>.</p>
         <div class="switch-row"><span class="sq"><img src="/logos/moneybird.png" alt="Moneybird"></span><span class="sq"><img src="/logos/eboekhouden.png" alt="e-Boekhouden"></span><span class="sq"><img src="/logos/sheets.png" alt="Spreadsheet"></span><span class="arrow">→</span><span class="sq bz"><img src="/logo.png" alt="Bookiz"></span></div>
       </div>
     </div>

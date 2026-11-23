@@ -1,4 +1,4 @@
-import { DEADLINES, SOURCES, sourceList } from './sources.ts';
+import { COMPETITOR_PRICES, PRICES_CHECKED_ON, DEADLINES, SOURCES, sourceList } from './sources.ts';
 
 /**
  * Two guides that sit under the switching hub: leaving Moneybird, and closing
@@ -31,7 +31,7 @@ export function yearEndBody(f: YearEndFacts, esc: Esc): string {
     <li><strong>Boek investeringen als investering.</strong> Een bedrijfsmiddel van ${f.investeringDrempel} of meer schrijf je af; daaronder trek je het in één keer af als kosten. Investeer je in een jaar in totaal meer dan ${f.kiaVanaf}, dan kan de ${rule('kia', 'kleinschaligheidsinvesteringsaftrek')} gelden. Bookiz past beide toe als je de aankoop als investering boekt.</li>
     <li><strong>Tel je uren.</strong> Besteed je in het kalenderjaar minstens ${f.urencriterium.toLocaleString('nl-NL')} uur aan je onderneming, dan haal je het ${rule('urencriterium', 'urencriterium')}. Dat is een voorwaarde voor de zelfstandigenaftrek van ${f.zelfstandigenaftrek} en, als starter, de startersaftrek van ${f.startersaftrek}. Ben je geen starter, dan moet je ook meer tijd aan je onderneming besteden dan aan ander werk. Bookiz telt geen uren: je geeft zelf op of je het criterium haalt.</li>
     <li><strong>Beslis over de kleineondernemersregeling voor volgend jaar.</strong> Wil je per 1 januari met de KOR beginnen of stoppen, dan moet je aanmelding of afmelding uiterlijk ${DEADLINES.korWeeks} weken vóór de ingangsdatum binnen zijn bij de Belastingdienst. Voor 1 januari is dat begin december. De KOR kan alleen als je omzet in het jaar van aanmelding en het jaar ervoor niet boven ${f.korOmzetgrens} komt.</li>
-    <li><strong>Kies je pakket voor volgend jaar.</strong> Wil je overstappen, dan is 1 januari het makkelijkste moment. Lees wat je meeneemt in <a href="/overstappen/">overstappen van boekhoudprogramma</a>.</li>
+    <li><strong>Kies je pakket voor volgend jaar.</strong> Wil je overstappen, dan is 1 januari het makkelijkste moment. Lees wat je meeneemt in <a href="/overstappen/">overstappen van boekhoudprogramma</a>. Kom je van Moneybird, lees dan eerst <a href="/overstappen/moneybird/">wanneer je Moneybird opzegt</a>: pas na je btw-aangifte over het vierde kwartaal.</li>
   </ol>
 
   <h2>In januari</h2>
@@ -56,57 +56,98 @@ export function yearEndBody(f: YearEndFacts, esc: Esc): string {
 `;
 }
 
-export type MoneybirdFacts = { retentionYears: number; cloudPrice: number; trialDays: number; korOmzetgrens: string };
+export type MoneybirdFacts = { retentionYears: number; cloudPrice: number; cloudPriceIncl: number; q4Deadline: string; trialDays: number; korOmzetgrens: string };
 
-export const moneybirdFaq = (f: MoneybirdFacts): [string, string][] => [
-  [
-    'Raak ik mijn Moneybird-gegevens kwijt als ik opzeg?',
-    'Als je niets doet, wel. Moneybird verwijdert je administratie veertien dagen na de einddatum van je abonnement, tenzij je een ander pakket kiest, zoals Compact. Maak daarom eerst een jaarexport van elk boekjaar en bewaar die.',
-  ],
-  [
-    'Kan ik mijn factuurnummers uit Moneybird doortellen?',
-    'Ja. Stap je midden in het jaar over, dan geef je je laatste factuurnummer op en telt Bookiz daarna door. Stap je per 1 januari over, dan kun je met een nieuwe reeks beginnen.',
-  ],
-  [
-    'Gebruik ik de kleineondernemersregeling. Kan dat in Bookiz?',
-    `Ja. Je geeft de startdatum van je KOR op; facturen gaan dan zonder btw de deur uit en Bookiz houdt je omzet bij tegen de grens van ${f.korOmzetgrens}. De factuur die de grens zou overschrijden, weigert Bookiz.`,
-  ],
-  [
-    'Heeft Bookiz een bankkoppeling zoals Moneybird?',
-    'Nee. Je meldt een betaling aan je assistent. Heb je een bankkoppeling, voorraad of personeel nodig, dan past Moneybird beter.',
-  ],
+const money = (amount: number): string => `€ ${amount.toLocaleString('nl-NL', { minimumFractionDigits: Number.isInteger(amount) ? 0 : 2, maximumFractionDigits: 2 })}`;
+
+export const moneybirdFaq = (): [string, string][] => [
+  ['Hoe lang is de opzegtermijn van Moneybird?', `Bij een maandabonnement stopt je pakket aan het eind van de maand die je al betaald hebt. Bij een jaarabonnement loopt het door tot het eind van het betaalde jaar. Geld voor een periode die al gefactureerd is, krijg je niet terug.`],
+  ['Raak ik mijn Moneybird-gegevens kwijt als ik opzeg?', `Als je niets doet, wel. Moneybird verwijdert je administratie 14 dagen na de einddatum van je abonnement, tenzij je alsnog een pakket kiest, zoals Compact. Maak daarom eerst een jaarexport van elk boekjaar.`],
+  ['Kan ik Moneybird opzeggen via de app of per e-mail?', `Nee. Opzeggen kan alleen in de webversie, op een computer of in de desktopversie op je telefoon, en alleen door de eigenaar van de administratie.`],
+  ['Is Moneybird nog gratis?', `Nee. Sinds de nieuwe pakketten van 1 juli 2026 heeft elke administratie een abonnement nodig. Het kleinste pakket, Compact, kost ${money(COMPETITOR_PRICES.moneybird.compactYear)} per maand bij een jaarabonnement.`],
+  ['Heeft Bookiz een bankkoppeling zoals Moneybird?', `Nee. Je meldt een betaling aan je assistent. Heb je een bankkoppeling, voorraad of personeel nodig, dan past Moneybird beter.`],
 ];
 
 export function moneybirdBody(f: MoneybirdFacts, esc: Esc): string {
+  const m = COMPETITOR_PRICES.moneybird;
+  const archive = m.startMonth + 11 * m.compactMonth;
+  const priceDate = new Date(`${PRICES_CHECKED_ON}T12:00:00Z`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' });
   return `
-  <h2>Een alternatief voor Moneybird als je weinig factureert</h2>
-  <p>Bookiz is bedoeld voor eenmanszaken met een handvol facturen per maand, die hun boekhouding willen doen in een gesprek met hun eigen AI-assistent. Je betaalt een vast bedrag per jaar, en zelf hosten is gratis. Het heeft geen bankkoppeling, geen voorraad en geen loonadministratie. Heb je die nodig, blijf dan bij Moneybird.</p>
-
-  <h2>Stap 1: maak een back-up van elk boekjaar</h2>
-  <p>Ga in Moneybird naar <strong>Instellingen › Boekhouding › Boekhouding exporteren</strong>. Klik bij Jaarexport op <strong>Download jaarexport</strong>, kies het boekjaar en klik op <strong>Exporteren</strong>. Zodra de export klaar is, download je het ZIP-bestand. Doe dit voor elk boekjaar dat je moet bewaren: je administratie moet je ${f.retentionYears} jaar kunnen tonen. In hetzelfde menu download je met Auditfile alleen de auditfile.</p>
-
-  <h2>Stap 2: kies je overstapdatum</h2>
-  <p>Per 1 januari is het makkelijkst: je jaaroverzicht komt dan uit één pakket. Het tweede goede moment is het begin van een btw-kwartaal, zoals 1 april. De aangifte over het kwartaal vóór je overstap doe je nog uit Moneybird. De afwegingen staan in <a href="/overstappen/">overstappen van boekhoudprogramma</a>.</p>
-
-  <h2>Stap 3: zet over wat doorloopt</h2>
-  <p>Je neemt alleen mee wat na de overstapdatum nog leeft: je klanten, je onbetaalde facturen, je bedrijfsmiddelen met hun boekwaarde, en bij een overstap midden in het jaar je laatste factuurnummer.</p>
+  <h2>Hoe zeg je Moneybird op?</h2>
+  <p>Opzeggen doe je in de webversie van Moneybird, als eigenaar van de administratie. Op je telefoon gebruik je de desktopversie van de site.</p>
+  <ol>
+  <li><strong>Zeg eerst je Moneybird Betaalrekening op, als je die hebt.</strong> Die heeft een actief pakket nodig. Boek het saldo over, blokkeer je pas en zeg de rekening op via Instellingen › Bank › Rekeningen.</li>
+  <li><strong>Maak een back-up van elk boekjaar.</strong> Ga naar Instellingen › Boekhouding › Boekhouding exporteren en klik bij Jaarexport op Download jaarexport. Kies het boekjaar, klik op Exporteren en download het ZIP-bestand. Je moet je administratie ${f.retentionYears} jaar kunnen tonen.</li>
+  <li><strong>Zeg je abonnement op.</strong> Ga naar Instellingen › Abonnement › Huidig pakket en klik op Abonnement opzeggen. Je ziet twee datums en bevestigt met een vinkje dat je ze begrijpt.</li>
+  </ol>
+  <h2>Wat gebeurt er na het opzeggen?</h2>
+  <p>Tot en met de einddatum werk je gewoon door. Na de einddatum kun je niet meer in je administratie werken, maar wel nog een back-up maken. 14 dagen na de einddatum verwijdert Moneybird je administratie met alle gegevens, tenzij je alsnog een pakket kiest. Zeg je niets op, dan verlengt je abonnement vanzelf.</p>
+  <h2>Hoe lang is de opzegtermijn?</h2>
+  <p>Bij een maandabonnement stopt je pakket aan het eind van de maand die je al betaald hebt. Bij een jaarabonnement loopt het door tot het eind van het betaalde jaar. Een wijziging met terugwerkende kracht kan niet, en Moneybird crediteert kosten die al gefactureerd zijn niet.</p>
+  <h2>Wanneer zeg je op als je per 1 januari overstapt?</h2>
+  <p>Pas na je laatste btw-aangifte uit Moneybird. Stap je per 1 januari over, dan doe je de aangifte over het vierde kwartaal nog in Moneybird, en die moet uiterlijk ${f.q4Deadline} binnen zijn. Zeg daarna op. Een maandabonnement kost je dan nog één maand Moneybird.</p>
+  <p>Tijdlijn voor een overstap per 1 januari 2027:</p>
   <ul>
-    <li><strong>Met je assistent.</strong> Moneybird heeft een eigen MCP-koppeling voor AI-assistenten; alleen-lezen is genoeg. Koppel je assistent aan Moneybird en aan Bookiz en zeg: “Ik stap per 1 januari over van Moneybird. Zet mijn klanten en openstaande facturen over naar Bookiz.” Je bedrijfsmiddelen en hun boekwaarde geef je zelf op; die staan in je laatste jaaroverzicht.</li>
-    <li><strong>Zonder koppeling.</strong> Lees de gegevens voor uit je export. Bookiz vraagt om de bedragen en schat niets.</li>
+  <li><strong>December 2026:</strong> maak je laatste facturen van 2026 in Moneybird. Probeer Bookiz ernaast.</li>
+  <li><strong>1 januari 2027:</strong> nieuwe facturen maak je in Bookiz. Zet je klanten en openstaande facturen over (zie hieronder).</li>
+  <li><strong>Januari 2027:</strong> doe de btw-aangifte over het vierde kwartaal van 2026 uit Moneybird, uiterlijk ${f.q4Deadline}. Lees ook hoe je <a href="/jaarafsluiting/">je boekjaar afsluit</a>.</li>
+  <li><strong>Na die aangifte:</strong> maak de jaarexport van 2026 en zeg op, of kies Compact.</li>
   </ul>
-
-  <h2>Stap 4: controleer</h2>
-  <p>Het openstaande bedrag in Bookiz moet gelijk zijn aan dat in Moneybird. Klopt de boekwaarde van je bedrijfsmiddelen ook, dan ben je klaar. Meld het als er iets niet klopt: de overstapfunctie van Bookiz is nieuw.</p>
-
-  <h2>Stap 5: zeg Moneybird op</h2>
-  <p>Opzeggen doe je in Moneybird via <strong>Instellingen › Abonnement › Huidig pakket</strong> met de knop <strong>Abonnement opzeggen</strong>. Je ziet dan twee datums. Tot de einddatum werk je gewoon door. Veertien dagen later verwijdert Moneybird je administratie met alle gegevens, tenzij je alsnog een pakket kiest, zoals Compact. Een back-up maken kan na de einddatum nog, tot de verwijderdatum. Wacht met opzeggen tot je laatste btw-aangifte uit Moneybird is gedaan.</p>
-
-  <h2>Wat kost het?</h2>
-  <p>Zelf hosten is gratis. Bookiz Cloud kost € ${f.cloudPrice} per jaar exclusief btw, na ${f.trialDays} dagen op proef. Het overzetten zelf kost niets. Wat je verder nodig hebt, staat in <a href="/goedkoop-boekhoudprogramma-zzp/">wat Bookiz kost</a>.</p>
-
+  <h2>Opzeggen of Compact houden?</h2>
+  <p>Compact is het kleinste pakket van Moneybird en kost ${money(m.compactYear)} per maand bij een jaarabonnement of ${money(m.compactMonth)} per maand bij een maandabonnement. Je administratie blijft dan bewaard en je kunt erin kijken, maar je verstuurt maximaal 1 verkoopfactuur per maand en doet er geen btw-aangifte mee. Kies Compact als je je oude jaren in Moneybird wilt kunnen openen. Heb je genoeg aan de jaarexport op je eigen schijf, zeg dan op.</p>
+  <h2>Wat kost blijven of overstappen?</h2>
+  <p>Zelf hosten kost niets. Hieronder staan de reguliere jaarprijzen en de grenzen per pakket.</p>
+  <p>Prijzen gecontroleerd op <time datetime="${PRICES_CHECKED_ON}">${priceDate}</time> op de prijspagina's van de aanbieders.</p>
+  <table class="rules comparison">
+    <caption>Prijzen per jaar, gecontroleerd op ${priceDate}</caption>
+    <thead><tr><th scope="col">Pakket</th><th scope="col">Prijs per jaar</th><th scope="col">Grenzen</th><th scope="col">Past bij</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Bookiz, zelf hosten</th><td data-label="Prijs per jaar">€ 0</td><td data-label="Grenzen">Je installeert het zelf (Node.js). Geen bankkoppeling, voorraad of loon.</td><td data-label="Past bij">Wie zelf wil hosten en Claude Desktop of Claude Code gebruikt</td></tr>
+      <tr><th scope="row">Bookiz Cloud</th><td data-label="Prijs per jaar">${money(f.cloudPrice)} excl. btw (${money(f.cloudPriceIncl)} incl.), eerste ${f.trialDays} dagen gratis</td><td data-label="Grenzen">Geen bankkoppeling. Alleen eenmanszaak en factuurstelsel.</td><td data-label="Past bij">Eenmanszaak met weinig facturen en een eigen AI-assistent</td></tr>
+      <tr><th scope="row">Moneybird Compact</th><td data-label="Prijs per jaar">${money(m.compactYear * 12)} (jaarabonnement) of ${money(m.compactMonth * 12)} (maand)</td><td data-label="Grenzen">1 verkoopfactuur per maand, geen btw-aangifte, 5 banktransacties per maand</td><td data-label="Past bij">Je oude administratie bewaren</td></tr>
+      <tr><th scope="row">Moneybird Start</th><td data-label="Prijs per jaar">${money(m.startYear * 12)} (jaarabonnement) of ${money(m.startMonth * 12)} (maand)</td><td data-label="Grenzen">200 verkoopfacturen en 20 banktransacties per maand, geen bankkoppeling</td><td data-label="Past bij">Zzp'er die in Moneybird btw-aangifte doet zonder bankkoppeling</td></tr>
+      <tr><th scope="row">e-Boekhouden.nl ZZP</th><td data-label="Prijs per jaar">${money(COMPETITOR_PRICES.eboekhouden.zzpMonth * 12)} (12 x ${money(COMPETITOR_PRICES.eboekhouden.zzpMonth)}). Nieuwe klanten: 12 maanden 50% korting; starters 15 maanden gratis</td><td data-label="Grenzen">Maximaal 240 boekingen per boekjaar</td><td data-label="Past bij">Volledig online pakket voor weinig boekingen</td></tr>
+      <tr><th scope="row">Jortt ZZP</th><td data-label="Prijs per jaar">${money(COMPETITOR_PRICES.jortt.zzpYear * 12)} excl. btw (jaar) of ${money(COMPETITOR_PRICES.jortt.zzpMonth * 12)} (maand)</td><td data-label="Grenzen">1 bank gekoppeld</td><td data-label="Past bij">Wie veel automatisch wil laten boeken, met bankkoppeling</td></tr>
+      <tr><th scope="row">Excel of een spreadsheet</th><td data-label="Prijs per jaar">€ 0</td><td data-label="Grenzen">Je rekent btw en aftrekposten zelf uit, zonder controles</td><td data-label="Past bij">Wie alles zelf wil doen</td></tr>
+    </tbody>
+  </table>
+  <p>Moneybird en e-Boekhouden.nl vermelden op deze prijspagina's niet of hun bedragen inclusief of exclusief btw zijn. De Jortt-prijzen zijn reguliere tarieven, zonder tijdelijke actie.</p>
+  <p>Ben je btw-plichtig, dan trek je de btw op je abonnement af als voorbelasting.</p>
+  <h2>Rekenvoorbeeld: een zzp'er met 3 facturen per maand</h2>
+  <p>Aannames:</p>
+  <ul>
+  <li>Aanname: je hebt nu Moneybird Start op een maandabonnement (${money(m.startMonth)} per maand).</li>
+  <li>Aanname: je doet btw-aangifte per kwartaal en hebt geen bankkoppeling nodig.</li>
+  <li>Aanname: je stapt over per 1 januari 2027 en de prijzen van november 2026 blijven in 2027 gelijk.</li>
+  <li>Aanname: alle bedragen zijn exclusief btw. Moneybird zegt op de prijspagina niet of de prijzen inclusief of exclusief btw zijn.</li>
+  </ul>
+  <table class="rules comparison"><thead><tr><th scope="col">Scenario voor 2027</th><th scope="col">Moneybird</th><th scope="col">Bookiz Cloud</th><th scope="col">Totaal 2027</th></tr></thead><tbody>
+  <tr><th scope="row">Blijven op Start, maandabonnement</th><td data-label="Moneybird">12 x ${money(m.startMonth)} = ${money(m.startMonth * 12)}</td><td data-label="Bookiz Cloud">€ 0</td><td data-label="Totaal 2027">${money(m.startMonth * 12)}</td></tr>
+  <tr><th scope="row">Overstappen, alles exporteren</th><td data-label="Moneybird">januari Start: ${money(m.startMonth)}</td><td data-label="Bookiz Cloud">${money(f.cloudPrice)}</td><td data-label="Totaal 2027">${money(m.startMonth + f.cloudPrice)}</td></tr>
+  <tr><th scope="row">Overstappen, Moneybird als archief op Compact</th><td data-label="Moneybird">${money(m.startMonth)} + 11 x ${money(m.compactMonth)} = ${money(archive)}</td><td data-label="Bookiz Cloud">${money(f.cloudPrice)}</td><td data-label="Totaal 2027">${money(archive + f.cloudPrice)}</td></tr>
+  <tr><th scope="row">Overstappen en Bookiz zelf hosten, alles exporteren</th><td data-label="Moneybird">${money(m.startMonth)}</td><td data-label="Bookiz Cloud">€ 0</td><td data-label="Totaal 2027">${money(m.startMonth)}</td></tr>
+  </tbody></table>
+  <p>Wie op Start blijft met een jaarabonnement, betaalt 12 x ${money(m.startYear)} = ${money(m.startYear * 12)}. Kreeg je sinds de nieuwe pakketten van 1 juli 2026 een overgangskorting, dan is jouw bedrag anders: kijk in Moneybird bij Instellingen › Abonnement › Huidig pakket › Verbruik.</p>
+  <h2>Klanten en openstaande facturen overzetten</h2>
+  <p>Je neemt alleen mee wat na de overstapdatum doorloopt: je klanten, je onbetaalde facturen, je bedrijfsmiddelen met hun boekwaarde en, bij een overstap midden in het jaar, je laatste factuurnummer.</p>
+  <ul>
+  <li><strong>Met je assistent.</strong> Moneybird heeft een eigen MCP-koppeling voor AI-assistenten; alleen-lezen is genoeg. Koppel je assistent aan Moneybird en aan Bookiz en zeg: "Ik stap per 1 januari over van Moneybird. Zet mijn klanten en openstaande facturen over naar Bookiz." Je bedrijfsmiddelen en hun boekwaarde geef je zelf op.</li>
+  <li><strong>Zonder koppeling.</strong> Lees de gegevens voor uit je export. Bookiz vraagt om de bedragen en schat niets.</li>
+  </ul>
+  <p>Controleer daarna: het openstaande bedrag in Bookiz moet gelijk zijn aan dat in Moneybird. De overstapfunctie van Bookiz is nieuw en is gebouwd vanuit de regels, niet getest op een echte export van een ander pakket. Meld het als er iets niet klopt.</p>
+  <p>Stap je midden in het jaar over, dan geef je je laatste factuurnummer op en telt Bookiz daarna door. Per 1 januari kun je met een nieuwe reeks beginnen.</p>
+  <p>Gebruik je de kleineondernemersregeling, dan geef je in Bookiz de startdatum van je KOR op. Bookiz houdt je omzet bij tegen de grens van <a href="/belastingregels-2026/#kor_omzetgrens">${f.korOmzetgrens}</a>.</p>
+  <h2>Wat Bookiz niet kan</h2>
+  <p>Bookiz is klein met opzet. Er is geen bankkoppeling: je meldt een betaling aan je assistent. Geen voorraad, geen loonadministratie, geen offertes. Bookiz is niet voor bv's, het kasstelsel, de margeregeling of goederen over de grens. Bookiz rekent je btw-aangifte en je jaaroverzicht uit, maar dient niets in bij de Belastingdienst. Heb je een bankkoppeling of personeel nodig, blijf dan bij Moneybird of kies een ander volledig pakket.</p>
+  <h2>Volgende stap</h2>
+  <ul>
+  <li>Lees eerst <a href="/overstappen/">wanneer je het makkelijkst overstapt</a> (gids).</li>
+  <li>Bekijk <a href="/goedkoop-boekhoudprogramma-zzp/">wat Bookiz kost en wat je daarnaast nodig hebt</a>.</li>
+  <li><a href="/app">Probeer Bookiz Cloud ${f.trialDays} dagen gratis</a> of <a href="https://github.com/meestierolff/bookiz">host het zelf, gratis</a>.</li>
+  </ul>
   <h2>Bronnen</h2>
-  ${sourceList([SOURCES.moneybirdBackup, SOURCES.moneybirdOpzeggen, SOURCES.moneybirdAgents], esc)}
-  <p class="note-line">Moneybird is een merk van Moneybird B.V. Bookiz is er niet aan verbonden. De stappen in Moneybird zijn overgenomen uit hun eigen kennisbank.</p>
+  ${sourceList([SOURCES.moneybirdBackup, SOURCES.moneybirdOpzeggen, SOURCES.moneybirdAgents, SOURCES.moneybirdPrijzen, SOURCES.moneybirdPakketten, SOURCES.moneybirdNieuwePakketten, SOURCES.moneybirdBetaalrekening, SOURCES.eboekhoudenPrijzen, SOURCES.jorttPrijs, SOURCES.btwDeadlines], esc)}
+  <p>Moneybird is een merk van Moneybird B.V. Bookiz is er niet aan verbonden.</p>
 `;
 }
 
@@ -189,6 +230,7 @@ ${f.dfy ? `      <tr><th scope="row">Done For You</th><td class="value">${f.dfy.
   <ul>
     <li><a href="/app">Probeer Bookiz Cloud ${f.trialDays} dagen gratis</a>; je logt in met je e-mailadres.</li>
     <li><a href="${esc(f.repoUrl)}">Host het zelf</a>, gratis.</li>
+    <li>Gebruik je nu Moneybird? Lees <a href="/overstappen/moneybird/">Moneybird opzeggen en overstappen</a>, met een rekenvoorbeeld.</li>
     <li>Kom je van een ander pakket? Lees <a href="/overstappen/">wanneer en hoe je overstapt</a>.</li>
   </ul>
 

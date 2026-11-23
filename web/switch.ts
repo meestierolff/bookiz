@@ -96,7 +96,7 @@ export function switchBody(facts: SwitchFacts, esc: Esc): string {
   </table>
 
   <h2>Overstappen vanuit Moneybird</h2>
-  <p>Moneybird heeft een eigen MCP-koppeling voor AI-assistenten. Koppel je assistent aan beide, dan kan hij je klanten en je onbetaalde facturen in Moneybird opzoeken en in Bookiz vastleggen. Let op: na de einddatum van je abonnement verwijdert Moneybird je administratie na veertien dagen. Maak dus eerst een back-up. Alle stappen staan in <a href="/overstappen/moneybird/">overstappen van Moneybird</a>.</p>
+  <p>Moneybird heeft een eigen MCP-koppeling voor AI-assistenten. Koppel je assistent aan beide, dan kan hij je klanten en je onbetaalde facturen in Moneybird opzoeken en in Bookiz vastleggen. Let op: na de einddatum van je abonnement verwijdert Moneybird je administratie na veertien dagen. Maak dus eerst een back-up. Alle stappen staan in <a href="/overstappen/moneybird/">Moneybird opzeggen en overstappen</a>.</p>
   <p>De overstapfunctie van Bookiz is nieuw. Vergelijk na afloop het openstaande bedrag en de boekwaarde van je bedrijfsmiddelen met de cijfers in je oude pakket, en meld het als er iets niet klopt.</p>
 
   <h2>Overstappen van Jortt, e-Boekhouden, Rompslomp of een spreadsheet</h2>
